@@ -9,20 +9,26 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  url_launcher: ^6.1.10
 
-  # Standard Icons
-  cupertino_icons: ^1.0.8
+  # --- Core Packages ---
+  http: ^1.2.1             # For API calls
+  cupertino_icons: ^1.0.8  # Standard iOS style icons
+  flutter_svg: ^2.0.10     # For SVG icon support
 
-  # Mapping and Geolocation Packages
-  flutter_map: ^6.1.0
-  latlong2: ^0.9.0
-  http: ^1.1.0          
-  geolocator: ^10.1.0   
-  
-  # Image & Branding Packages
+  # --- Mapping & Location ---
+  flutter_map: ^7.0.0      # Latest map package
+  latlong2: ^0.9.1         # Coordinate handling
+  geolocator: ^12.0.0      # GPS location
+  shared_preferences: ^2.2.2  # Add this for Search History
+
+  # --- New Add-Ons (Added for Search & Voice) ---
+  flutter_typeahead: ^5.2.0   # For address autocomplete/suggestions
+  flutter_tts: ^4.0.2         # For Text-to-Speech (Voice Navigation)
+  permission_handler: ^11.3.0 # Better permission dialogs
+
+  # --- Branding ---
   flutter_launcher_icons: ^0.14.4
-  flutter_native_splash: ^2.4.0 # Added for loading screen support
+  flutter_native_splash: ^2.4.0 
 
 dev_dependencies:
   flutter_test:
@@ -32,10 +38,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/ # Ensures the assets folder is registered in Flutter
+    - assets/ # Ensures the assets folder is registered
 
 # ✅ Experience-Based Branding Configuration
-# This section handles your APK Logo
 flutter_launcher_icons:
   android: true
   ios: true
@@ -43,8 +48,7 @@ flutter_launcher_icons:
   min_sdk_android: 21
 
 # ✅ Splash Screen Configuration
-# This handles the loading screen appearance
 flutter_native_splash:
-  color: "#ffffff"           # Background color of the loading screen
-  image: "assets/logo.png"   # Your created logo
-  android_12: true           # Support for newer Android devices
+  color: "#ffffff"           
+  image: "assets/logo.png"   
+  android_12: true

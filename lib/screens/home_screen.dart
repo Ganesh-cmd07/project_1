@@ -14,12 +14,12 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // ✅ Experience: Your Logo (the one you set as APK icon)
+              //  Your Logo (the one you set as APK icon)
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: Image.asset(
                   'assets/logo.png',
-                  height: 150,
+                  height: 150, 
                   width: 150,
                 ),
               ),
