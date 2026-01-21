@@ -1,4 +1,4 @@
 {
     "cmake.sourceDirectory": "C:/dev/project_1/linux",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "disabled"
 }

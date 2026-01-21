@@ -15,6 +15,8 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "project_1"
+
+// Include Flutter Gradle plugin from ephemeral directory
 includeBuild("flutter/ephemeral/packages/flutter_tools/gradle")
 
 include(":app")
