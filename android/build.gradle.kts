@@ -7,6 +7,7 @@ plugins {
     id("org.jetbrains.kotlin.android") version "1.9.10" apply false
     id("dev.flutter.flutter-gradle-plugin") apply false
     id("com.google.gms.google-services") version "4.4.0" apply false
+    id("com.google.gms.google-services")
 }
 
 allprojects {
