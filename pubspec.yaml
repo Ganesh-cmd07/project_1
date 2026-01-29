@@ -11,35 +11,30 @@ dependencies:
     sdk: flutter
 
   # --- Core Packages ---
-  http: ^1.2.1             # For API calls
-  cupertino_icons: ^1.0.8  # Standard iOS style icons
-  flutter_svg: ^2.0.10     # For SVG icon support
+  http: ^1.2.1
+  cupertino_icons: ^1.0.8
+  flutter_svg: ^2.0.10
 
   # --- Mapping & Location ---
-  flutter_map: ^7.0.0      # Latest map package
-  latlong2: ^0.9.1         # Coordinate handling
-  geolocator: ^12.0.0      # GPS location
-  shared_preferences: ^2.2.2  # Add this for Search History
+  flutter_map: ^7.0.0
+  latlong2: ^0.9.1
+  geolocator: ^12.0.0
+  shared_preferences: ^2.2.2
 
-  # --- New Add-Ons (Added for Search & Voice) ---
-  flutter_typeahead: ^5.2.0   # For address autocomplete/suggestions
-  flutter_tts: ^4.0.2         # For Text-to-Speech (Voice Navigation)
-  permission_handler: ^11.3.0 # Better permission dialogs
+  # --- New Add-Ons ---
+  flutter_typeahead: ^5.2.0
+  flutter_tts: ^4.0.2
+  permission_handler: ^11.3.0
 
-  # --- Firebase Integration (v2.0: Crowd-Sourced Safety) ---
-  firebase_core: ^3.1.0       # Firebase initialization
-  cloud_firestore: ^5.0.1     # Real-time hazard database
+  # --- Firebase Integration ---
+  firebase_core: ^3.1.0
+  cloud_firestore: ^5.0.1
+  firebase_auth: ^5.7.0
+  google_sign_in: ^6.1.0
 
   # --- Branding ---
   flutter_launcher_icons: ^0.14.4
-  flutter_native_splash: ^2.4.0 
-  firebase_auth: ^5.7.0
-
-  dependencies:
-  flutter:
-    sdk: flutter
-  firebase_core: ^3.0.0  # Ensure this is also present
-  firebase_auth: ^5.0.0  # Add this line
+  flutter_native_splash: ^2.4.0
 
 dev_dependencies:
   flutter_test:
@@ -49,17 +44,15 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/ # Ensures the assets folder is registered
+    - assets/
 
-# ✅ Experience-Based Branding Configuration
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/logo.png"
   min_sdk_android: 21
 
-# ✅ Splash Screen Configuration
 flutter_native_splash:
-  color: "#ffffff"           
-  image: "assets/logo.png"   
+  color: "#ffffff"
+  image: "assets/logo.png"
   android_12: true
