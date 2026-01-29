@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:project_1/screens/map_screen.dart';
 
-void main() => runApp(const RainSafeApp());
+/// Entry point of the Rain Safe Navigator application.
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(const RainSafeApp());
+}
 
+/// Root widget of the Rain Safe Navigator application.
+/// Provides Material Design theme and initializes the home screen.
 class RainSafeApp extends StatelessWidget {
+  /// Creates a [RainSafeApp] widget.
   const RainSafeApp({super.key});
 
   @override
@@ -17,7 +29,10 @@ class RainSafeApp extends StatelessWidget {
   }
 }
 
+/// Home screen for route planning and navigation setup.
+/// Allows users to input start and end locations for safe route calculation.
 class HomeScreen extends StatefulWidget {
+  /// Creates a [HomeScreen] widget.
   const HomeScreen({super.key});
 
   @override
@@ -25,8 +40,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  /// Controller for the start location input field.
   final TextEditingController _startController =
       TextEditingController(text: "Current Location");
+
+  /// Controller for the end location input field.
   final TextEditingController _endController = TextEditingController();
 
   @override
@@ -78,8 +96,8 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 50,
               child: ElevatedButton(
                 onPressed: () {
-                  String start = _startController.text.trim();
-                  String end = _endController.text.trim();
+                  final String start = _startController.text.trim();
+                  final String end = _endController.text.trim();
 
                   if (end.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(

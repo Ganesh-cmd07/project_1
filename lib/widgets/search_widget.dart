@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
+/// A custom search widget for location input with autocomplete suggestions.
+/// Provides typeahead functionality for both start and end locations.
 class RainSafeSearchWidget extends StatefulWidget {
+  /// Controller for the start location input field.
   final TextEditingController startController;
+
+  /// Controller for the end location input field.
   final TextEditingController endController;
+
+  /// Callback invoked when the search is pressed.
   final VoidCallback onSearchPressed;
 
+  /// Creates a [RainSafeSearchWidget].
+  ///
+  /// All parameters are required.
   const RainSafeSearchWidget({
     super.key,
     required this.startController,
@@ -19,10 +29,10 @@ class RainSafeSearchWidget extends StatefulWidget {
 
 class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
   final ApiService _api = ApiService();
-  
+
   List<String> _suggestions = [];
   bool _showSuggestions = false;
-  bool _isTypingInStart = false; 
+  bool _isTypingInStart = false;
 
   void _onTextChanged(String query, bool isStartField) async {
     setState(() {
@@ -30,7 +40,7 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
     });
 
     if (query.isEmpty) {
-      final history = await _api.getPlaceSuggestions(""); 
+      final history = await _api.getPlaceSuggestions("");
       if (mounted) {
         setState(() {
           _suggestions = history;
@@ -41,7 +51,7 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
     }
 
     final results = await _api.getPlaceSuggestions(query);
-    
+
     if (mounted) {
       setState(() {
         _suggestions = results;
@@ -60,7 +70,7 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
       _showSuggestions = false;
       _suggestions = [];
     });
-    FocusScope.of(context).unfocus(); 
+    FocusScope.of(context).unfocus();
   }
 
   @override
@@ -72,7 +82,8 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
         Card(
           elevation: 8,
           color: Colors.grey[900], // ✅ Black Background
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Column(
@@ -84,8 +95,11 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
                   hint: "Start (or 'Current Location')",
                   isStart: true,
                 ),
-                Divider(height: 1, thickness: 0.5, color: Colors.grey[700]), // Dark divider
-                
+                Divider(
+                    height: 1,
+                    thickness: 0.5,
+                    color: Colors.grey[700]), // Dark divider
+
                 // Destination Field
                 _buildTextField(
                   controller: widget.endController,
@@ -93,9 +107,9 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
                   hint: "Where to?",
                   isStart: false,
                 ),
-                
+
                 const SizedBox(height: 8),
-                
+
                 // Search Button
                 SizedBox(
                   width: double.infinity,
@@ -107,10 +121,12 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    child: const Text("Find Safe Route", style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text("Find Safe Route",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -126,7 +142,10 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
               color: Colors.grey[900], // ✅ Black Background
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
-                 BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 5))
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5))
               ],
             ),
             child: ConstrainedBox(
@@ -135,13 +154,17 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
                 itemCount: _suggestions.length,
-                separatorBuilder: (ctx, i) => Divider(height: 1, color: Colors.grey[800]),
+                separatorBuilder: (ctx, i) =>
+                    Divider(height: 1, color: Colors.grey[800]),
                 itemBuilder: (ctx, index) {
                   final option = _suggestions[index];
                   return ListTile(
                     dense: true,
-                    leading: const Icon(Icons.history, size: 18, color: Colors.grey),
-                    title: Text(option, style: const TextStyle(fontSize: 14, color: Colors.white)), // ✅ White Text
+                    leading:
+                        const Icon(Icons.history, size: 18, color: Colors.grey),
+                    title: Text(option,
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.white)), // ✅ White Text
                     onTap: () => _onSuggestionTapped(option),
                   );
                 },

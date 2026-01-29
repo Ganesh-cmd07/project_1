@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'map_screen.dart';
 
+/// Home/landing screen for the Rain Safe Navigator application.
+/// Displays the app logo, title, and tagline with a button to access the map.
 class HomeScreen extends StatelessWidget {
+  /// Creates a [HomeScreen] widget.
   const HomeScreen({super.key});
 
   @override
@@ -19,7 +22,7 @@ class HomeScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 child: Image.asset(
                   'assets/logo.png',
-                  height: 150, 
+                  height: 150,
                   width: 150,
                 ),
               ),
@@ -58,7 +61,8 @@ class HomeScreen extends StatelessWidget {
                     // Navigate to MapScreen
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const MapScreen()),
+                      MaterialPageRoute(
+                          builder: (context) => const MapScreen()),
                     );
                   },
                   child: const Text(
