@@ -1,12 +1,10 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
-    id("com.google.gms.google-services") version "4.4.0" apply false
+    id("com.google.gms.google-services") // This is correct}
+// REMOVE the extra plugins block you had at the bottom of this file
 }
-
 android {
     namespace = "com.example.project_1"
     compileSdk = flutter.compileSdkVersion
