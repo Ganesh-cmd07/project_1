@@ -1,8 +1,9 @@
+/// A custom search widget for location input with autocomplete suggestions.
+/// Provides typeahead functionality for both start and end locations.
+library;
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
-/// A custom search widget for location input with autocomplete suggestions.
-/// Provides typeahead functionality for both start and end locations.
 class RainSafeSearchWidget extends StatefulWidget {
   /// Controller for the start location input field.
   final TextEditingController startController;
@@ -14,8 +15,6 @@ class RainSafeSearchWidget extends StatefulWidget {
   final VoidCallback onSearchPressed;
 
   /// Creates a [RainSafeSearchWidget].
-  ///
-  /// All parameters are required.
   const RainSafeSearchWidget({
     super.key,
     required this.startController,
@@ -78,12 +77,11 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // THE SEARCH CARD (Now Black)
+        // THE SEARCH CARD (Black Background)
         Card(
           elevation: 8,
-          color: Colors.grey[900], // ✅ Black Background
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          color: Colors.grey[900],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Column(
@@ -95,10 +93,7 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
                   hint: "Start (or 'Current Location')",
                   isStart: true,
                 ),
-                Divider(
-                    height: 1,
-                    thickness: 0.5,
-                    color: Colors.grey[700]), // Dark divider
+                Divider(height: 1, thickness: 0.5, color: Colors.grey[700]),
 
                 // Destination Field
                 _buildTextField(
@@ -134,12 +129,12 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
           ),
         ),
 
-        // THE SUGGESTION LIST (Now Black)
+        // THE SUGGESTION LIST (Black Background)
         if (_showSuggestions)
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey[900], // ✅ Black Background
+              color: Colors.grey[900],
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
                 BoxShadow(
@@ -160,11 +155,9 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
                   final option = _suggestions[index];
                   return ListTile(
                     dense: true,
-                    leading:
-                        const Icon(Icons.history, size: 18, color: Colors.grey),
+                    leading: const Icon(Icons.history, size: 18, color: Colors.grey),
                     title: Text(option,
-                        style: const TextStyle(
-                            fontSize: 14, color: Colors.white)), // ✅ White Text
+                        style: const TextStyle(fontSize: 14, color: Colors.white)),
                     onTap: () => _onSuggestionTapped(option),
                   );
                 },
@@ -183,7 +176,7 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
   }) {
     return TextField(
       controller: controller,
-      style: const TextStyle(color: Colors.white), // ✅ White Input Text
+      style: const TextStyle(color: Colors.white),
       onChanged: (val) => _onTextChanged(val, isStart),
       onTap: () {
         if (controller.text.isEmpty) _onTextChanged("", isStart);
@@ -192,7 +185,7 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
         icon: Icon(icon, color: isStart ? Colors.blue : Colors.redAccent),
         border: InputBorder.none,
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.grey.shade600), // ✅ Dark Grey Hint
+        hintStyle: TextStyle(color: Colors.grey.shade600),
         suffixIcon: controller.text.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.clear, size: 18, color: Colors.grey),
