@@ -14,6 +14,8 @@ dependencies:
   firebase_core: ^3.1.0
   firebase_auth: ^5.7.0
   cloud_firestore: ^5.0.1
+  # Add this if it's missing to help with the interop error
+  js: ^0.7.0
 
   # Location & Maps
   geolocator: ^10.1.0
