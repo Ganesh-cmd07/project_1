@@ -1,58 +1,53 @@
 name: project_1
-description: A new Flutter project for RainSafe Navigator.
+description: RainSafe Navigator - Weather-intelligent navigation app
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.1.0 <4.0.0'
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # --- Core Packages ---
-  http: ^1.2.1
-  cupertino_icons: ^1.0.8
-  flutter_svg: ^2.0.10
+  # Firebase Core
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.16.0
+  cloud_firestore: ^4.14.0
 
-  # --- Mapping & Location ---
-  flutter_map: ^7.0.0
-  latlong2: ^0.9.1
-  geolocator: ^12.0.0
+  # Location & Maps
+  geolocator: ^10.1.0
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+
+  # Voice & Audio
+  flutter_tts: ^3.8.5
+
+  # HTTP & Storage
+  http: ^1.1.0
   shared_preferences: ^2.2.2
 
-  # --- New Add-Ons ---
-  flutter_typeahead: ^5.2.0
-  flutter_tts: ^4.0.2
-  permission_handler: ^11.3.0
-
-  # --- Firebase Integration ---
-  firebase_core: ^3.1.0
-  cloud_firestore: ^5.0.1
-  firebase_auth: ^5.7.0
-  google_sign_in: ^6.1.0
-
-  # --- Branding ---
-  flutter_launcher_icons: ^0.14.4
-  flutter_native_splash: ^2.4.0
+  # UI Components
+  cupertino_icons: ^1.0.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
 
+# ✅ FIXED: Assets configuration
 flutter:
   uses-material-design: true
+
+  # Logo and Images
   assets:
     - assets/
+    - assets/logo.png
 
-flutter_launcher_icons:
-  android: true
-  ios: true
-  image_path: "assets/logo.png"
-  min_sdk_android: 21
-
-flutter_native_splash:
-  color: "#ffffff"
-  image: "assets/logo.png"
-  android_12: true
+  # If you want to add custom fonts (optional):
+  # fonts:
+  #   - family: Roboto
+  #     fonts:
+  #       - asset: fonts/Roboto-Regular.ttf
+  #       - asset: fonts/Roboto-Bold.ttf
+  #         weight: 700
