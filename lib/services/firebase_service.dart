@@ -11,22 +11,20 @@ import '../utils/error_handler.dart';
 /// - Trust scoring based on sensor cross-check
 /// - Geo-hashing for scalability
 /// - 4-hour TTL for auto-cleanup
+/// 
+/// ✅ FIXED: Method signatures corrected for Liar Algorithm integration
 class FirebaseService {
   static const String _tag = 'FirebaseService';
   static const String _hazardsCollection = 'hazards';
-  static const Duration _reportExpirationHours = Duration(hours: 4); // TTL
+  static const Duration _reportExpirationHours = Duration(hours: 4);
 
-  /// Firestore instance (lazy-loaded).
   static late final FirebaseFirestore _firestore;
 
   /// Initialize Firebase Firestore.
   static Future<void> initialize() async {
     try {
       _firestore = FirebaseFirestore.instance;
-
-      // Enable offline persistence for better UX
       await _firestore.enableNetwork();
-
       ErrorHandler.logError(_tag, 'Firebase Firestore initialized');
     } catch (e) {
       ErrorHandler.logError(_tag, 'Firebase initialization error: $e');
@@ -38,6 +36,8 @@ class FirebaseService {
   /// 
   /// ANTI-PRANKSTER FILTER: Validates report against real-time weather data.
   /// If user reports "Waterlogging" but weather shows 0mm rain, trust score is reduced.
+  /// 
+  /// ✅ FIXED: Now accepts ApiService object for weather validation
   static Future<bool> submitHazardReport(
     HazardReport report,
     ApiService apiService,
@@ -45,6 +45,7 @@ class FirebaseService {
     try {
       // SENSOR CROSS-CHECK: Validate against weather data
       double adjustedTrustScore = report.trustScore;
+      bool weatherValidated = false;
       
       if (report.hazardType.toLowerCase().contains('waterlog') ||
           report.hazardType.toLowerCase().contains('flood')) {
@@ -53,19 +54,32 @@ class FirebaseService {
         
         if (weather != null) {
           final rainIntensity = (weather['rain'] as num?)?.toDouble() ?? 0.0;
+          final weatherCode = (weather['weathercode'] as int?) ?? 0;
+          final isRaining = weatherCode >= 51 && weatherCode <= 99;
           
-          if (rainIntensity == 0.0) {
-            // No rain detected - reduce trust score
-            adjustedTrustScore = 0.2; // Flag for review
+          if (rainIntensity == 0.0 && !isRaining) {
+            // No rain detected - suspicious report
+            adjustedTrustScore = 0.2;
             ErrorHandler.logError(
               _tag,
-              'Suspicious report: Waterlogging claimed with 0mm rain',
+              '⚠️ Suspicious report: Waterlogging claimed with 0mm rain',
             );
-          } else if (rainIntensity >= 5.0) {
-            // Heavy rain confirms the report
-            adjustedTrustScore = 0.9;
+          } else if (rainIntensity >= 5.0 || isRaining) {
+            // Heavy rain or rain detected - confirms the report
+            adjustedTrustScore = 0.75;
+            weatherValidated = true;
+            ErrorHandler.logError(
+              _tag,
+              '✅ Weather validation: Rain detected (${rainIntensity}mm/hr)',
+            );
+          } else {
+            // Light rain - moderate trust
+            adjustedTrustScore = 0.5;
           }
         }
+      } else {
+        // For non-weather hazards (accidents, road blocks), use default trust
+        adjustedTrustScore = 0.6;
       }
 
       // Calculate expiration time (4-hour TTL)
@@ -75,8 +89,10 @@ class FirebaseService {
         'location': {
           'latitude': report.location.latitude,
           'longitude': report.location.longitude,
-          // Add geohash for efficient queries
-          'geohash': _generateGeohash(report.location.latitude, report.location.longitude),
+          'geohash': _generateGeohash(
+            report.location.latitude,
+            report.location.longitude,
+          ),
         },
         'hazardType': report.hazardType,
         'timestamp': Timestamp.fromDate(report.timestamp),
@@ -85,24 +101,35 @@ class FirebaseService {
         'status': report.status.toString().split('.').last,
         'confirmationCount': 0,
         'severity': _calculateSeverity(report.hazardType),
+        'weatherValidated': weatherValidated,
       };
 
       // Submit to Firestore
-      await _firestore.collection(_hazardsCollection).add(reportData);
+      final docRef = await _firestore.collection(_hazardsCollection).add(reportData);
 
       ErrorHandler.logError(
         _tag,
-        'Hazard reported: ${report.hazardType} at ${report.location} (Trust: ${adjustedTrustScore.toStringAsFixed(2)})',
+        '✅ Hazard reported successfully!\n'
+        '   Document ID: ${docRef.id}\n'
+        '   Type: ${report.hazardType}\n'
+        '   Location: (${report.location.latitude.toStringAsFixed(4)}, ${report.location.longitude.toStringAsFixed(4)})\n'
+        '   Trust Score: ${adjustedTrustScore.toStringAsFixed(2)}\n'
+        '   Weather Validated: $weatherValidated',
       );
 
       return true;
+      
     } on FirebaseException catch (e) {
       final message = _getFirebaseErrorMessage(e);
-      ErrorHandler.logError(_tag, 'Firebase error: $message');
-      rethrow;
-    } catch (e) {
-      ErrorHandler.logError(_tag, 'Hazard submission error: $e');
-      rethrow;
+      ErrorHandler.logError(_tag, '❌ Firebase error: $message');
+      ErrorHandler.logError(_tag, '   Error code: ${e.code}');
+      ErrorHandler.logError(_tag, '   Error message: ${e.message}');
+      return false;
+      
+    } catch (e, stackTrace) {
+      ErrorHandler.logError(_tag, '❌ Hazard submission error: $e');
+      ErrorHandler.logError(_tag, '   Stack trace: $stackTrace');
+      return false;
     }
   }
 
@@ -118,27 +145,34 @@ class FirebaseService {
 
       final data = doc.data() as Map<String, dynamic>;
       final currentCount = (data['confirmationCount'] as int?) ?? 0;
+      final currentTrust = (data['trustScore'] as num?)?.toDouble() ?? 0.5;
       final newCount = currentCount + 1;
 
-      // Update confirmation count
+      // Increase trust score with each confirmation (max 1.0)
+      final newTrust = (currentTrust + 0.15).clamp(0.0, 1.0);
+
+      // Update confirmation count and trust score
       await docRef.update({
         'confirmationCount': newCount,
+        'trustScore': newTrust,
         'status': newCount >= 3 ? 'verified' : 'pending',
-        'trustScore': newCount >= 3 ? 1.0 : (0.5 + (newCount * 0.15)),
       });
 
       ErrorHandler.logError(
         _tag,
-        'Hazard confirmed ($newCount/3): $hazardDocId',
+        '✅ Hazard confirmed ($newCount/3)\n'
+        '   Trust Score: ${currentTrust.toStringAsFixed(2)} → ${newTrust.toStringAsFixed(2)}',
       );
 
       return true;
+      
     } on FirebaseException catch (e) {
       final message = _getFirebaseErrorMessage(e);
-      ErrorHandler.logError(_tag, 'Firebase error: $message');
+      ErrorHandler.logError(_tag, '❌ Confirm error: $message');
       return false;
+      
     } catch (e) {
-      ErrorHandler.logError(_tag, 'Confirm hazard error: $e');
+      ErrorHandler.logError(_tag, '❌ Confirm hazard error: $e');
       return false;
     }
   }
@@ -148,20 +182,38 @@ class FirebaseService {
   /// THE "LIAR" ALGORITHM: Track false reports to shadow-ban unreliable users.
   static Future<bool> rejectHazard(String hazardDocId) async {
     try {
-      await _firestore.collection(_hazardsCollection).doc(hazardDocId).update({
-        'status': 'rejected',
+      final docRef = _firestore.collection(_hazardsCollection).doc(hazardDocId);
+      final doc = await docRef.get();
+
+      if (!doc.exists) return false;
+
+      final data = doc.data() as Map<String, dynamic>;
+      final currentTrust = (data['trustScore'] as num?)?.toDouble() ?? 0.5;
+
+      // Decrease trust score significantly
+      final newTrust = (currentTrust - 0.3).clamp(0.0, 1.0);
+
+      await docRef.update({
+        'status': newTrust < 0.3 ? 'rejected' : 'disputed',
         'rejectedAt': FieldValue.serverTimestamp(),
-        'trustScore': 0.0,
+        'trustScore': newTrust,
       });
 
-      ErrorHandler.logError(_tag, 'Hazard rejected: $hazardDocId');
+      ErrorHandler.logError(
+        _tag,
+        '⚠️ Hazard rejected/disputed\n'
+        '   Trust Score: ${currentTrust.toStringAsFixed(2)} → ${newTrust.toStringAsFixed(2)}',
+      );
+      
       return true;
+      
     } on FirebaseException catch (e) {
       final message = _getFirebaseErrorMessage(e);
-      ErrorHandler.logError(_tag, 'Firebase error: $message');
+      ErrorHandler.logError(_tag, '❌ Reject error: $message');
       return false;
+      
     } catch (e) {
-      ErrorHandler.logError(_tag, 'Reject hazard error: $e');
+      ErrorHandler.logError(_tag, '❌ Reject hazard error: $e');
       return false;
     }
   }
@@ -199,6 +251,7 @@ class FirebaseService {
 
             // Filter by distance
             final distance = _calculateDistance(latitude, longitude, lat, lon);
+            
             if (distance <= radiusKm) {
               final report = HazardReport(
                 location: LatLng(lat, lon),
@@ -208,21 +261,32 @@ class FirebaseService {
                 status: _parseStatus((data['status'] as String?) ?? 'pending'),
                 confirmationCount: (data['confirmationCount'] as int?) ?? 0,
               );
-              reports.add(report);
+              
+              // Only include reports with sufficient trust score
+              if (report.trustScore >= 0.4) {
+                reports.add(report);
+              }
             }
           }
         } catch (e) {
-          ErrorHandler.logError(_tag, 'Error parsing hazard: $e');
+          ErrorHandler.logError(_tag, 'Error parsing hazard document: $e');
         }
       }
 
+      ErrorHandler.logError(
+        _tag,
+        '📍 Retrieved ${reports.length} active hazards within ${radiusKm}km',
+      );
+
       return reports;
+      
     } on FirebaseException catch (e) {
       final message = _getFirebaseErrorMessage(e);
-      ErrorHandler.logError(_tag, 'Firebase query error: $message');
+      ErrorHandler.logError(_tag, '❌ Query error: $message');
       return [];
+      
     } catch (e) {
-      ErrorHandler.logError(_tag, 'Nearby hazards error: $e');
+      ErrorHandler.logError(_tag, '❌ Nearby hazards error: $e');
       return [];
     }
   }
@@ -258,10 +322,14 @@ class FirebaseService {
                 status: _parseStatus((data['status'] as String?) ?? 'pending'),
                 confirmationCount: (data['confirmationCount'] as int?) ?? 0,
               );
-              reports.add(report);
+              
+              // Only include trusted reports
+              if (report.trustScore >= 0.4) {
+                reports.add(report);
+              }
             }
           } catch (e) {
-            ErrorHandler.logError(_tag, 'Error parsing hazard: $e');
+            ErrorHandler.logError(_tag, 'Error parsing hazard in stream: $e');
           }
         }
 
@@ -270,6 +338,7 @@ class FirebaseService {
         ErrorHandler.logError(_tag, 'Stream error: $error');
         return <HazardReport>[];
       });
+      
     } catch (e) {
       ErrorHandler.logError(_tag, 'Stream creation error: $e');
       return Stream.value([]);
@@ -281,9 +350,7 @@ class FirebaseService {
   // ====================================================================
 
   /// Generate simple geohash for location.
-  /// For production, use geoflutterfire2 package.
   static String _generateGeohash(double lat, double lon) {
-    // Simplified 6-character geohash
     final latIndex = ((lat + 90) / 180 * 1000).floor();
     final lonIndex = ((lon + 180) / 360 * 1000).floor();
     return '${latIndex}_$lonIndex';
@@ -312,6 +379,7 @@ class FirebaseService {
       case 'road block':
         return 2;
       case 'waterlogging':
+      case 'flood':
         return 1;
       default:
         return 0;
@@ -336,13 +404,15 @@ class FirebaseService {
   static String _getFirebaseErrorMessage(FirebaseException e) {
     switch (e.code) {
       case 'permission-denied':
-        return 'Permission denied. Please check Firestore rules.';
+        return 'Permission denied. Check Firestore rules and anonymous auth.';
       case 'network-error':
-        return 'Network error. Please check your connection.';
+        return 'Network error. Please check your internet connection.';
       case 'unavailable':
-        return 'Firebase is temporarily unavailable.';
+        return 'Firebase is temporarily unavailable. Please try again.';
       case 'unauthenticated':
-        return 'Authentication required. Please sign in.';
+        return 'Authentication required. Anonymous auth may not be enabled.';
+      case 'deadline-exceeded':
+        return 'Request timed out. Please try again.';
       default:
         return 'Firebase error: ${e.code}';
     }
