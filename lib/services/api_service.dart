@@ -132,10 +132,12 @@ class ApiService {
   }
 
   // ==========================================
-  // 2. GPS & LOCATION SERVICES
+  // 2. GPS & LOCATION SERVICES (UPDATED FOR GEOLOCATOR V14)
   // ==========================================
 
   /// Get current GPS location with permission handling.
+  /// 
+  /// UPDATED: Now uses LocationSettings (Geolocator v14+ requirement)
   Future<LatLng?> getCurrentLocation() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -154,8 +156,10 @@ class ApiService {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
       );
       return LatLng(position.latitude, position.longitude);
     } catch (e) {
@@ -168,6 +172,8 @@ class ApiService {
   /// 
   /// THERMAL/BATTERY GUARD: Distance filter can be adjusted dynamically
   /// to reduce battery drain and heat on long straightaways.
+  /// 
+  /// UPDATED: Now uses LocationSettings (Geolocator v14+ requirement)
   Stream<LatLng> getPositionStream({
     LocationAccuracy accuracy = LocationAccuracy.bestForNavigation,
     int distanceFilter = 10,
