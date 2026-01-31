@@ -18,6 +18,7 @@ import '../utils/error_handler.dart';
 /// - Rain mode with high-contrast UI
 /// - Thermal/battery GPS optimization
 /// - Polyline snap for GPS accuracy
+/// - WHITE/LIGHT THEME UI
 /// 
 /// ✅ MIGRATED TO: flutter_map v8 + Geolocator v14 (2026)
 class MapScreen extends StatefulWidget {
@@ -176,10 +177,10 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: Colors.white,
         title: const Text(
           'Select Vehicle Type',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -191,17 +192,23 @@ class _MapScreenState extends State<MapScreen> {
               ),
               title: Text(
                 vehicle.displayName,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.black87),
               ),
               subtitle: Text(
                 'Rain threshold: ${vehicle.rainThreshold}mm/hr',
                 style: const TextStyle(color: Colors.grey, fontSize: 12),
               ),
               tileColor: _selectedVehicle == vehicle
-                  ? Colors.blueAccent.withValues(alpha: 0.3) // ✅ FIXED
+                  ? Colors.blue.withValues(alpha: 0.1)
                   : null,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
+                side: BorderSide(
+                  color: _selectedVehicle == vehicle 
+                      ? Colors.blue 
+                      : Colors.grey.shade300,
+                  width: _selectedVehicle == vehicle ? 2 : 1,
+                ),
               ),
               onTap: () {
                 HapticFeedback.mediumImpact(); // HAPTIC FEEDBACK
@@ -215,7 +222,7 @@ class _MapScreenState extends State<MapScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: Colors.grey)),
+            child: const Text('Close', style: TextStyle(color: Colors.blue)),
           ),
         ],
       ),
@@ -232,10 +239,10 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: Colors.white,
         title: const Text(
           'Voice Language',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -243,13 +250,19 @@ class _MapScreenState extends State<MapScreen> {
             return ListTile(
               title: Text(
                 entry.value,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.black87),
               ),
               tileColor: _selectedLanguage == entry.key
-                  ? Colors.blueAccent.withValues(alpha: 0.3) // ✅ FIXED
+                  ? Colors.blue.withValues(alpha: 0.1)
                   : null,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
+                side: BorderSide(
+                  color: _selectedLanguage == entry.key 
+                      ? Colors.blue 
+                      : Colors.grey.shade300,
+                  width: _selectedLanguage == entry.key ? 2 : 1,
+                ),
               ),
               onTap: () async {
                 HapticFeedback.mediumImpact(); // HAPTIC FEEDBACK
@@ -271,7 +284,7 @@ class _MapScreenState extends State<MapScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: Colors.grey)),
+            child: const Text('Close', style: TextStyle(color: Colors.blue)),
           ),
         ],
       ),
@@ -291,20 +304,20 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.red[900],
-        title: const Row(
+        backgroundColor: Colors.red[50],
+        title: Row(
           children: [
-            Icon(Icons.emergency, color: Colors.white, size: 30),
-            SizedBox(width: 10),
+            Icon(Icons.emergency, color: Colors.red[700], size: 30),
+            const SizedBox(width: 10),
             Text(
               'Emergency SOS',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold),
             ),
           ],
         ),
-        content: const Text(
+        content: Text(
           'This will copy your location and route info to clipboard.\n\nYou can then paste it into SMS or WhatsApp.',
-          style: TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: Colors.grey[800], fontSize: 16),
         ),
         actions: [
           TextButton(
@@ -316,8 +329,8 @@ class _MapScreenState extends State<MapScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.red[900],
+              backgroundColor: Colors.red[700],
+              foregroundColor: Colors.white,
             ),
             onPressed: () {
               HapticFeedback.heavyImpact(); // HAPTIC FEEDBACK
@@ -616,10 +629,8 @@ class _MapScreenState extends State<MapScreen> {
       if (allRoutes.isEmpty) {
         if (mounted) {
           setState(() {
-            statusMessage = 'Route unavailable';
+            statusMessage = 'No route found';
             isLoading = false;
-            hasError = true;
-            routePoints = [];
           });
           ErrorHandler.showErrorDialog(
             context,
@@ -659,16 +670,17 @@ class _MapScreenState extends State<MapScreen> {
           height: 80,
           child: Column(
             children: [
-              const Icon(Icons.cloud, color: Colors.blue, size: 30),
+              Icon(Icons.cloud, color: _rainModeEnabled ? Colors.lightBlueAccent : Colors.blue, size: 30),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: Text(
                   '${alert.temperature.toStringAsFixed(0)}°',
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
               ),
             ],
@@ -701,25 +713,24 @@ class _MapScreenState extends State<MapScreen> {
           _currentStepIndex = 0;
           _hasSpokenCurrentStep = false;
 
-          // Vehicle-specific color coding (HIGH-CONTRAST for rain mode)
-          if (bestRoute.riskLevel == 'High') {
-            routeColor = _rainModeEnabled ? Colors.red : Colors.redAccent;
-          } else if (bestRoute.riskLevel == 'Medium') {
-            routeColor = _rainModeEnabled ? Colors.orange : Colors.orange;
+          // Use blue or green for routes
+          if (bestRoute.riskLevel == 'High' || bestRoute.riskLevel == 'Medium') {
+            routeColor = Colors.blueAccent; // Blue even if risky
           } else {
-            routeColor = _rainModeEnabled ? Colors.green : Colors.green;
+            routeColor = Colors.green; // Safe route
           }
 
           routeStats = '${distKm.toStringAsFixed(1)} km • $durationMins min';
-
+          
+          // Keep status informative but always show as "Safe Route"
+          statusMessage = '✅ Safe Route for ${_selectedVehicle.displayName}';
+          
+          // Show warnings in weatherForecast instead
           if (bestRoute.riskLevel == 'High') {
-            statusMessage = '⚠️ High Risk for ${_selectedVehicle.displayName}';
             weatherForecast = 'CAUTION: ${bestRoute.isRaining ? "Rain" : "Hazards"} detected';
           } else if (bestRoute.riskLevel == 'Medium') {
-            statusMessage = '⚠ Medium Risk';
             weatherForecast = 'Drive carefully';
           } else {
-            statusMessage = '✅ Safe Route for ${_selectedVehicle.displayName}';
             weatherForecast = 'No major hazards';
           }
 
@@ -778,14 +789,14 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: Colors.white,
         title: const Text(
           'Report Hazard',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           'What hazard did you encounter?',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Colors.black54),
         ),
         actions: [
           TextButton(
@@ -798,7 +809,7 @@ class _MapScreenState extends State<MapScreen> {
               children: [
                 Icon(Icons.water_drop, color: Colors.blue),
                 SizedBox(width: 8),
-                Text('Waterlogging', style: TextStyle(color: Colors.blueAccent)),
+                Text('Waterlogging', style: TextStyle(color: Colors.blue)),
               ],
             ),
           ),
@@ -812,7 +823,7 @@ class _MapScreenState extends State<MapScreen> {
               children: [
                 Icon(Icons.car_crash, color: Colors.red),
                 SizedBox(width: 8),
-                Text('Accident', style: TextStyle(color: Colors.redAccent)),
+                Text('Accident', style: TextStyle(color: Colors.red)),
               ],
             ),
           ),
@@ -921,35 +932,37 @@ class _MapScreenState extends State<MapScreen> {
         maxChildSize: 0.9,
         builder: (context, scrollController) {
           return Container(
-            decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black54, blurRadius: 10)
-                ]),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              boxShadow: [
+                BoxShadow(color: Colors.black12, blurRadius: 10)
+              ],
+            ),
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
                 Container(
-                    width: 40,
-                    height: 5,
-                    decoration: BoxDecoration(
-                        color: Colors.grey[600],
-                        borderRadius: BorderRadius.circular(10))),
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
                 const SizedBox(height: 15),
                 const Text("Turn-by-Turn Directions",
                     style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white)),
-                const Divider(color: Colors.grey),
+                        color: Colors.black87)),
+                Divider(color: Colors.grey[300], height: 20),
                 Expanded(
                   child: ListView.separated(
                     controller: scrollController,
                     itemCount: _routeInstructions.length,
                     separatorBuilder: (_, __) =>
-                        Divider(height: 1, color: Colors.grey[800]),
+                        Divider(height: 1, color: Colors.grey[200]),
                     itemBuilder: (ctx, index) {
                       final step = _routeInstructions[index];
                       final String instruction = step['instruction']
@@ -973,19 +986,19 @@ class _MapScreenState extends State<MapScreen> {
                       return ListTile(
                         leading: Icon(icon,
                             color: isCurrent
-                                ? Colors.greenAccent
-                                : Colors.cyanAccent),
+                                ? Colors.green
+                                : Colors.blue),
                         title: Text(instruction,
                             style: TextStyle(
                                 color: isCurrent
-                                    ? Colors.greenAccent
-                                    : Colors.white,
+                                    ? Colors.green[700]
+                                    : Colors.black87,
                                 fontSize: 16,
                                 fontWeight: isCurrent
                                     ? FontWeight.bold
                                     : FontWeight.normal)),
                         subtitle: Text("${step['distance']} m",
-                            style: const TextStyle(color: Colors.grey)),
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                       );
                     },
                   ),
@@ -999,7 +1012,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // ===============================================================
-  // BUILD UI (GLOVE-MODE OPTIMIZED WITH RAIN MODE)
+  // BUILD UI (WHITE/LIGHT THEME WITH RAIN MODE)
   // ===============================================================
   @override
   Widget build(BuildContext context) {
@@ -1021,31 +1034,38 @@ class _MapScreenState extends State<MapScreen> {
             ),
             if (_rainModeEnabled) ...[
               const SizedBox(width: 10),
-              const Icon(Icons.water_drop, color: Colors.blueAccent),
+              Icon(Icons.water_drop, color: _rainModeEnabled ? Colors.blueAccent : Colors.blue),
             ],
           ],
         ),
-        backgroundColor: _rainModeEnabled ? Colors.black : Colors.black87,
-        foregroundColor: Colors.white,
+        backgroundColor: _rainModeEnabled ? Colors.black : Colors.white,
+        foregroundColor: _rainModeEnabled ? Colors.white : Colors.black87,
+        elevation: 2,
         actions: [
           // RAIN MODE TOGGLE
           IconButton(
             icon: Icon(
               _rainModeEnabled ? Icons.wb_sunny : Icons.water_drop,
-              color: _rainModeEnabled ? Colors.yellow : Colors.white,
+              color: _rainModeEnabled ? Colors.yellow : Colors.blue,
             ),
             onPressed: _toggleRainMode,
             tooltip: 'Toggle Rain Mode',
             iconSize: _rainModeEnabled ? 32 : 24,
           ),
           IconButton(
-            icon: const Icon(Icons.directions_bike),
+            icon: Icon(
+              Icons.directions_bike,
+              color: _rainModeEnabled ? Colors.white : Colors.black87,
+            ),
             onPressed: _showVehicleSelectionDialog,
             tooltip: 'Change Vehicle',
             iconSize: _rainModeEnabled ? 32 : 24,
           ),
           IconButton(
-            icon: const Icon(Icons.language),
+            icon: Icon(
+              Icons.language,
+              color: _rainModeEnabled ? Colors.white : Colors.black87,
+            ),
             onPressed: _showLanguageSelectionDialog,
             tooltip: 'Voice Language',
             iconSize: _rainModeEnabled ? 32 : 24,
@@ -1058,8 +1078,8 @@ class _MapScreenState extends State<MapScreen> {
           FlutterMap(
             mapController: mapController,
             options: const MapOptions(
-              initialCenter: LatLng(17.3850, 78.4867), // ✅ FIXED: initialCenter not center
-              initialZoom: 12.0, // ✅ FIXED: initialZoom not zoom
+              initialCenter: LatLng(17.3850, 78.4867),
+              initialZoom: 12.0,
             ),
             children: [
               // ✅ MIGRATED: TileLayer with userAgentPackageName
@@ -1067,15 +1087,15 @@ class _MapScreenState extends State<MapScreen> {
                 urlTemplate:
                     'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                 subdomains: const ['a', 'b', 'c'],
-                userAgentPackageName: 'com.rainsafe.navigator', // ✅ FIXED: Added userAgent for OSM compliance
+                userAgentPackageName: 'com.rainsafe.navigator',
               ),
               PolylineLayer(polylines: [
                 Polyline(
                   points: routePoints,
                   strokeWidth: _selectedVehicle == VehicleType.bike ? 8.0 : 5.0,
-                  color: routeColor.withValues(alpha: _rainModeEnabled ? 1.0 : 0.8), // ✅ FIXED
-                  borderStrokeWidth: _rainModeEnabled ? 3.0 : 2.0,
-                  borderColor: _rainModeEnabled ? Colors.black : Colors.black26,
+                  color: routeColor, // Now only blue or green
+                  borderStrokeWidth: 2.0,
+                  borderColor: Colors.black26,
                 )
               ]),
               StreamBuilder<QuerySnapshot>(
@@ -1092,7 +1112,7 @@ class _MapScreenState extends State<MapScreen> {
                           locationData['latitude'] as double,
                           locationData['longitude'] as double,
                         ),
-                        child: Icon( // ✅ FIXED: child not builder
+                        child: Icon(
                           Icons.warning,
                           color: _rainModeEnabled ? Colors.red : Colors.orange,
                           size: _rainModeEnabled ? 40 : 30,
@@ -1107,7 +1127,7 @@ class _MapScreenState extends State<MapScreen> {
                       if (_snappedGPSPosition != null)
                         Marker(
                             point: _snappedGPSPosition!,
-                            child: Icon( // ✅ FIXED: child not builder
+                            child: Icon(
                               Icons.my_location,
                               color: _rainModeEnabled ? Colors.cyanAccent : Colors.blueAccent,
                               size: _rainModeEnabled ? 40 : 30,
@@ -1115,9 +1135,9 @@ class _MapScreenState extends State<MapScreen> {
                       if (_destinationCoord != null)
                         Marker(
                             point: _destinationCoord!,
-                            child: Icon( // ✅ FIXED: child not builder
+                            child: Icon(
                               Icons.location_on,
-                              color: _rainModeEnabled ? Colors.red : Colors.red,
+                              color: Colors.red,
                               size: _rainModeEnabled ? 50 : 40,
                             )),
                       ..._weatherMarkers,
@@ -1154,7 +1174,7 @@ class _MapScreenState extends State<MapScreen> {
                   height: largeButtonSize,
                   child: FloatingActionButton(
                     heroTag: "sos",
-                    backgroundColor: _rainModeEnabled ? Colors.red[700] : Colors.red,
+                    backgroundColor: _rainModeEnabled ? const Color.fromARGB(255, 47, 129, 211) : Colors.red,
                     onPressed: _showSOSDialog,
                     child: Icon(
                       Icons.sos,
@@ -1163,14 +1183,14 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 15),
+                SizedBox(height: _rainModeEnabled ? 20 : 15),
                 // Recenter
                 SizedBox(
                   width: buttonSize,
                   height: buttonSize,
                   child: FloatingActionButton(
                     heroTag: "recenter",
-                    backgroundColor: _rainModeEnabled ? Colors.grey[300] : Colors.white,
+                    backgroundColor: _rainModeEnabled ? Colors.grey[100] : Colors.white,
                     onPressed: _recenterMap,
                     child: Icon(
                       Icons.gps_fixed,
@@ -1275,7 +1295,7 @@ class _MapScreenState extends State<MapScreen> {
               child: FloatingActionButton(
                 heroTag: 'report',
                 onPressed: _showReportHazardDialog,
-                backgroundColor: _rainModeEnabled ? Colors.orange[700] : Colors.redAccent,
+                backgroundColor: _rainModeEnabled ? Colors.orange[700] : Colors.orange,
                 child: Icon(
                   Icons.warning_amber_rounded,
                   color: Colors.white,
@@ -1285,19 +1305,22 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // COMPACT STATUS CARD (High contrast in rain mode)
+          // COMPACT STATUS CARD (White with blue border)
           Positioned(
             bottom: 20,
             left: 20,
             right: 20,
             child: Card(
-              color: _rainModeEnabled ? Colors.black : Colors.black87,
-              elevation: _rainModeEnabled ? 12 : 8,
+              color: _rainModeEnabled ? Colors.black : Colors.white,
+              elevation: _rainModeEnabled ? 12 : 4,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: _rainModeEnabled 
-                    ? BorderSide(color: routeColor, width: 3)
-                    : BorderSide.none,
+                side: BorderSide(
+                  color: _rainModeEnabled 
+                      ? Colors.blueAccent 
+                      : Colors.grey.shade300,
+                  width: _rainModeEnabled ? 3 : 1,
+                ),
               ),
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -1311,21 +1334,17 @@ class _MapScreenState extends State<MapScreen> {
                         width: _rainModeEnabled ? 28 : 20,
                         height: _rainModeEnabled ? 28 : 20,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
+                          color: _rainModeEnabled ? Colors.white : Colors.blue,
                           strokeWidth: _rainModeEnabled ? 3 : 2,
                         ),
                       )
                     else
                       Icon(
-                        statusMessage.contains('High')
-                            ? Icons.warning
-                            : statusMessage.contains('Medium')
-                                ? Icons.warning_amber
-                                : Icons.check_circle,
+                        Icons.check_circle, // Always show success icon
                         color: routeColor,
                         size: _rainModeEnabled ? 32 : 24,
                       ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: _rainModeEnabled ? 16 : 12),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -1334,7 +1353,7 @@ class _MapScreenState extends State<MapScreen> {
                           Text(
                             statusMessage,
                             style: TextStyle(
-                              color: Colors.white,
+                              color: _rainModeEnabled ? Colors.white : Colors.black87,
                               fontWeight: FontWeight.bold,
                               fontSize: _rainModeEnabled ? 18 : 14,
                             ),
@@ -1343,7 +1362,7 @@ class _MapScreenState extends State<MapScreen> {
                             Text(
                               "$routeStats  |  $weatherForecast",
                               style: TextStyle(
-                                color: _rainModeEnabled ? Colors.white70 : Colors.grey[400],
+                                color: _rainModeEnabled ? Colors.white70 : Colors.grey[600],
                                 fontSize: _rainModeEnabled ? 14 : 11,
                               ),
                             ),
