@@ -6,29 +6,27 @@ pluginManagement {
     }
 }
 
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
-    repositories {
-        google()
-        mavenCentral()
+plugins {
+    id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+    id("com.android.application") version "7.3.0" apply false
+    id("org.jetbrains.kotlin.android") version "1.7.20" apply false
+}
+
+// Read local.properties
+val localPropertiesFile = File(rootProject.projectDir, "local.properties")
+val properties = java.util.Properties()
+
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { stream ->
+        properties.load(stream)
     }
 }
 
-rootProject.name = "project_1"
+// Get Flutter SDK path
+val flutterSdkPath = properties.getProperty("flutter.sdk")
+    ?: throw GradleException("flutter.sdk not set in local.properties")
 
-// --- THE FIX ---
-// 1. Load the path from local.properties
-def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
-def properties = new Properties()
-
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader -> properties.load(reader) }
-}
-
-def flutterSdkPath = properties.getProperty("flutter.sdk")
-assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-
-// 2. Point to the REAL SDK location
+// Include Flutter
 includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
 include(":app")
