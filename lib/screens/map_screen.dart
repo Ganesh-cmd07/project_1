@@ -1318,7 +1318,7 @@ class _MapScreenState extends State<MapScreen> {
                   height: largeButtonSize,
                   child: FloatingActionButton(
                     heroTag: "sos",
-                    backgroundColor: _rainModeEnabled ? const Color.fromARGB(255, 47, 129, 211) : Colors.red,
+                    backgroundColor: Colors.red, // Always Red
                     onPressed: _showSOSDialog,
                     child: Icon(
                       Icons.sos,
@@ -1334,7 +1334,7 @@ class _MapScreenState extends State<MapScreen> {
                   height: buttonSize,
                   child: FloatingActionButton(
                     heroTag: "recenter",
-                    backgroundColor: _rainModeEnabled ? Colors.grey[100] : Colors.white,
+                    backgroundColor: Colors.white, // Always White
                     onPressed: _recenterMap,
                     child: Icon(
                       Icons.gps_fixed,
@@ -1357,7 +1357,7 @@ class _MapScreenState extends State<MapScreen> {
                 child: FloatingActionButton.extended(
                   heroTag: "startNav",
                   onPressed: _startNavigation,
-                  backgroundColor: _rainModeEnabled ? Colors.green[700] : Colors.green,
+                  backgroundColor: Colors.green, // Always Green
                   icon: Icon(
                     Icons.navigation,
                     color: Colors.white,
@@ -1384,7 +1384,7 @@ class _MapScreenState extends State<MapScreen> {
                 child: FloatingActionButton.extended(
                   heroTag: "stopNav",
                   onPressed: _stopNavigation,
-                  backgroundColor: _rainModeEnabled ? Colors.red[700] : Colors.red,
+                  backgroundColor: Colors.red, // Always Red
                   icon: Icon(
                     Icons.stop,
                     color: Colors.white,
@@ -1411,7 +1411,7 @@ class _MapScreenState extends State<MapScreen> {
                 height: buttonSize,
                 child: FloatingActionButton.extended(
                   heroTag: "directions",
-                  backgroundColor: _rainModeEnabled ? Colors.blue[700] : Colors.blueAccent,
+                  backgroundColor: Colors.blueAccent, // Always Blue
                   icon: Icon(
                     Icons.format_list_bulleted,
                     color: Colors.white,
@@ -1439,7 +1439,7 @@ class _MapScreenState extends State<MapScreen> {
               child: FloatingActionButton(
                 heroTag: 'report',
                 onPressed: _showReportHazardDialog,
-                backgroundColor: _rainModeEnabled ? Colors.orange[700] : Colors.orange,
+                backgroundColor: Colors.orange, // Always Orange
                 child: Icon(
                   Icons.warning_amber_rounded,
                   color: Colors.white,
@@ -1455,7 +1455,7 @@ class _MapScreenState extends State<MapScreen> {
             left: 20,
             right: 20,
             child: Card(
-              color: _rainModeEnabled ? Colors.black : Colors.white,
+              color: Colors.white, // Always White
               elevation: _rainModeEnabled ? 12 : 4,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1478,7 +1478,7 @@ class _MapScreenState extends State<MapScreen> {
                         width: _rainModeEnabled ? 28 : 20,
                         height: _rainModeEnabled ? 28 : 20,
                         child: CircularProgressIndicator(
-                          color: _rainModeEnabled ? Colors.white : Colors.blue,
+                          color: _rainModeEnabled ? Colors.blue : Colors.blue,
                           strokeWidth: _rainModeEnabled ? 3 : 2,
                         ),
                       )
@@ -1497,7 +1497,7 @@ class _MapScreenState extends State<MapScreen> {
                           Text(
                             statusMessage,
                             style: TextStyle(
-                              color: _rainModeEnabled ? Colors.white : Colors.black87,
+                              color: Colors.black87, // Always Black text
                               fontWeight: FontWeight.bold,
                               fontSize: _rainModeEnabled ? 18 : 14,
                             ),
@@ -1506,7 +1506,7 @@ class _MapScreenState extends State<MapScreen> {
                             Text(
                               "$routeStats  |  $weatherForecast",
                               style: TextStyle(
-                                color: _rainModeEnabled ? Colors.white70 : Colors.grey[600],
+                                color: Colors.grey[600], // Always Grey text
                                 fontSize: _rainModeEnabled ? 14 : 11,
                               ),
                             ),
