@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/api_service.dart';
 import '../services/firebase_service.dart';
 import '../models/route_model.dart';
-import '../widgets/search_widget.dart';
 import '../utils/error_handler.dart';
 
 /// Navigation screen with vehicle-specific intelligence, SOS, and multi-language guidance.
