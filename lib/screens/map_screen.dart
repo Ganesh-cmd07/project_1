@@ -130,8 +130,15 @@ class _MapScreenState extends State<MapScreen> {
       _startLiveTracking();
     }
     
-    // OFFLINE MODE: Check for saved route
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForSavedRoute());
+    // OFFLINE MODE: Check for saved route, then auto-calc if needed
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkForSavedRoute();
+      
+      // AUTO-CALCULATE: If no saved route restored, use the provided endpoint
+      if (_currentRoute == null && widget.endPoint.isNotEmpty) {
+        _calculateSafeRoute();
+      }
+    });
   }
 
   /// Initializes the text-to-speech engine.
@@ -1325,17 +1332,7 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
 
-          // SEARCH WIDGET
-          Positioned(
-            top: 10,
-            left: 15,
-            right: 15,
-            child: RainSafeSearchWidget(
-              startController: _startController,
-              endController: _endController,
-              onSearchPressed: () => _calculateSafeRoute(isRefetch: false),
-            ),
-          ),
+
 
           // RIGHT-SIDE BUTTONS GROUP (Bottom-Right)
           Positioned(
