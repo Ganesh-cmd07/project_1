@@ -996,11 +996,25 @@ class _MapScreenState extends State<MapScreen> {
     } catch (error) {
       if (!mounted) return;
       HapticFeedback.lightImpact(); // HAPTIC FEEDBACK for error
-      ErrorHandler.showError(
-        context,
-        'Failed to submit report: ${ErrorHandler.getUserFriendlyMessage(error)}',
-      );
+
+      String errorMessage = 'Failed to submit report';
+      
+      if (error is FirebaseException) {
+        if (error.code == 'permission-denied') {
+          errorMessage = 'Permission denied. You may need to sign in again.';
+          debugPrint('FIREBASE PERMISSION ERROR: ${error.message}');
+        } else if (error.code == 'unavailable') {
+          errorMessage = 'Network unavailable. Please check your connection.';
+        } else {
+          errorMessage = 'Firebase Error: ${error.message}';
+        }
+      } else {
+        errorMessage = ErrorHandler.getUserFriendlyMessage(error);
+      }
+      
+      ErrorHandler.showError(context, errorMessage);
       ErrorHandler.logError('HazardReport', 'Submission failed: $error');
+      debugPrint('FULL ERROR DETAILS: $error'); 
     }
   }
 
@@ -1306,128 +1320,121 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // GLOVE-MODE BUTTONS (Adaptive sizing for rain mode)
+          // RIGHT-SIDE BUTTONS GROUP (Bottom-Right)
           Positioned(
-            bottom: 240,
-            right: 20,
+            bottom: 100,
+            right: 16,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // SOS BUTTON (Red, prominent)
+                // SOS BUTTON
                 SizedBox(
                   width: largeButtonSize,
                   height: largeButtonSize,
                   child: FloatingActionButton(
-                    heroTag: "sos",
-                    backgroundColor: Colors.red, // Always Red
+                    heroTag: "sos_btn",
+                    backgroundColor: Colors.red,
                     onPressed: _showSOSDialog,
                     child: Icon(
                       Icons.sos,
                       color: Colors.white,
-                      size: _rainModeEnabled ? 50 : 40,
+                      size: _rainModeEnabled ? 40 : 30,
                     ),
                   ),
                 ),
-                SizedBox(height: _rainModeEnabled ? 20 : 15),
-                // Recenter
+                SizedBox(height: _rainModeEnabled ? 20 : 16),
+                
+                // RECENTER BUTTON
                 SizedBox(
                   width: buttonSize,
                   height: buttonSize,
                   child: FloatingActionButton(
-                    heroTag: "recenter",
-                    backgroundColor: Colors.white, // Always White
+                    heroTag: "recenter_btn",
+                    backgroundColor: Colors.white,
                     onPressed: _recenterMap,
                     child: Icon(
                       Icons.gps_fixed,
                       color: Colors.black87,
-                      size: _rainModeEnabled ? 35 : 24,
+                      size: _rainModeEnabled ? 30 : 24,
                     ),
                   ),
                 ),
+                SizedBox(height: _rainModeEnabled ? 20 : 16),
+                
+                // NAVIGATION START/STOP
+                if (_isNavigating)
+                   SizedBox(
+                    height: buttonSize,
+                    child: FloatingActionButton.extended(
+                      heroTag: "stop_nav_btn",
+                      onPressed: _stopNavigation,
+                      backgroundColor: Colors.red,
+                      icon: Icon(
+                        Icons.stop,
+                        color: Colors.white,
+                        size: _rainModeEnabled ? 24 : 18,
+                      ),
+                      label: Text(
+                        "Exit",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: _rainModeEnabled ? 16 : 14,
+                        ),
+                      ),
+                    ),
+                  )
+                else if (routePoints.isNotEmpty)
+                  SizedBox(
+                    height: buttonSize,
+                    child: FloatingActionButton.extended(
+                      heroTag: "start_nav_btn",
+                      onPressed: _startNavigation,
+                      backgroundColor: Colors.green,
+                      icon: Icon(
+                        Icons.navigation,
+                        color: Colors.white,
+                        size: _rainModeEnabled ? 24 : 18,
+                      ),
+                      label: Text(
+                        "Start",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: _rainModeEnabled ? 16 : 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                if (routePoints.isNotEmpty || _isNavigating) ...[
+                   SizedBox(height: _rainModeEnabled ? 20 : 16),
+                   // STEPS BUTTON
+                   SizedBox(
+                      height: buttonSize,
+                      child: FloatingActionButton.extended(
+                        heroTag: "steps_btn",
+                        backgroundColor: Colors.blueAccent,
+                        icon: Icon(
+                          Icons.format_list_bulleted,
+                          color: Colors.white,
+                          size: _rainModeEnabled ? 24 : 18,
+                        ),
+                        label: Text(
+                          "Steps",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: _rainModeEnabled ? 16 : 14,
+                          ),
+                        ),
+                         onPressed: _showDirectionsSheet,
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
-
-          // NAVIGATION BUTTONS (Rain mode adaptive)
-          if (routePoints.isNotEmpty && !_isNavigating)
-            Positioned(
-              bottom: 160,
-              right: 20,
-              child: SizedBox(
-                height: buttonSize,
-                child: FloatingActionButton.extended(
-                  heroTag: "startNav",
-                  onPressed: _startNavigation,
-                  backgroundColor: Colors.green, // Always Green
-                  icon: Icon(
-                    Icons.navigation,
-                    color: Colors.white,
-                    size: _rainModeEnabled ? 30 : 24,
-                  ),
-                  label: Text(
-                    "Start",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: _rainModeEnabled ? 24 : 18,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          if (_isNavigating)
-            Positioned(
-              bottom: 160,
-              right: 20,
-              child: SizedBox(
-                height: buttonSize,
-                child: FloatingActionButton.extended(
-                  heroTag: "stopNav",
-                  onPressed: _stopNavigation,
-                  backgroundColor: Colors.red, // Always Red
-                  icon: Icon(
-                    Icons.stop,
-                    color: Colors.white,
-                    size: _rainModeEnabled ? 30 : 24,
-                  ),
-                  label: Text(
-                    "Exit",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: _rainModeEnabled ? 24 : 18,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // STEPS BUTTON
-          if (_routeInstructions.isNotEmpty)
-            Positioned(
-              bottom: 90,
-              right: 20,
-              child: SizedBox(
-                height: buttonSize,
-                child: FloatingActionButton.extended(
-                  heroTag: "directions",
-                  backgroundColor: Colors.blueAccent, // Always Blue
-                  icon: Icon(
-                    Icons.format_list_bulleted,
-                    color: Colors.white,
-                    size: _rainModeEnabled ? 28 : 24,
-                  ),
-                  label: Text(
-                    "Steps",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: _rainModeEnabled ? 20 : 16,
-                    ),
-                  ),
-                  onPressed: _showDirectionsSheet,
-                ),
-              ),
-            ),
 
           // REPORT HAZARD BUTTON (Rain mode adaptive)
           Positioned(
@@ -1443,7 +1450,7 @@ class _MapScreenState extends State<MapScreen> {
                 child: Icon(
                   Icons.warning_amber_rounded,
                   color: Colors.white,
-                  size: _rainModeEnabled ? 45 : 35,
+                  size: _rainModeEnabled ? 30: 20,
                 ),
               ),
             ),
@@ -1475,8 +1482,8 @@ class _MapScreenState extends State<MapScreen> {
                   children: [
                     if (isLoading)
                       SizedBox(
-                        width: _rainModeEnabled ? 28 : 20,
-                        height: _rainModeEnabled ? 28 : 20,
+                        width: _rainModeEnabled ? 18 : 12,
+                        height: _rainModeEnabled ? 18 : 12,
                         child: CircularProgressIndicator(
                           color: _rainModeEnabled ? Colors.blue : Colors.blue,
                           strokeWidth: _rainModeEnabled ? 3 : 2,
@@ -1486,7 +1493,7 @@ class _MapScreenState extends State<MapScreen> {
                       Icon(
                         Icons.check_circle, // Always show success icon
                         color: routeColor,
-                        size: _rainModeEnabled ? 32 : 24,
+                        size: _rainModeEnabled ? 18 : 12,
                       ),
                     SizedBox(width: _rainModeEnabled ? 16 : 12),
                     Expanded(
@@ -1499,7 +1506,7 @@ class _MapScreenState extends State<MapScreen> {
                             style: TextStyle(
                               color: Colors.black87, // Always Black text
                               fontWeight: FontWeight.bold,
-                              fontSize: _rainModeEnabled ? 18 : 14,
+                              fontSize: _rainModeEnabled ? 14 : 10,
                             ),
                           ),
                           if (routeStats.isNotEmpty)
@@ -1507,7 +1514,7 @@ class _MapScreenState extends State<MapScreen> {
                               "$routeStats  |  $weatherForecast",
                               style: TextStyle(
                                 color: Colors.grey[600], // Always Grey text
-                                fontSize: _rainModeEnabled ? 14 : 11,
+                                fontSize: _rainModeEnabled ? 10 : 8,
                               ),
                             ),
                         ],
