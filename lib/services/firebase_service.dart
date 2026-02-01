@@ -121,7 +121,7 @@ class FirebaseService {
           ),
         },
         'hazardType': report.hazardType,
-        'timestamp': Timestamp.fromDate(report.timestamp),
+        'timestamp': FieldValue.serverTimestamp(),
         'expiresAt': Timestamp.fromDate(expiresAt),
         'trustScore': adjustedTrustScore,
         'status': 'pending', // Always starts as pending

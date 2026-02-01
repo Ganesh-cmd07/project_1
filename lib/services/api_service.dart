@@ -765,7 +765,7 @@ class ApiService {
       final jsonStr = json.encode(route.toJson());
       await prefs.setString('active_route_data', jsonStr);
       await prefs.setString('active_route_timestamp', DateTime.now().toIso8601String());
-      ErrorHandler.logError(_tag, 'Route saved to local storage');
+      ErrorHandler.logInfo(_tag, 'Route saved to local storage');
     } catch (e) {
       ErrorHandler.logError(_tag, 'Failed to save route: $e');
     }

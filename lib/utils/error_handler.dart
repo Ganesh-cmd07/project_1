@@ -18,7 +18,7 @@ class ErrorHandler {
             ),
           ],
         ),
-        backgroundColor: Colors.redAccent,
+        backgroundColor: Colors.white70,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ),
@@ -106,6 +106,11 @@ class ErrorHandler {
     if (stackTrace != null) {
       debugPrint('Stack Trace:\n$stackTrace');
     }
+  }
+
+  /// Log info to console.
+  static void logInfo(String tag, String message) {
+    debugPrint('ℹ️ [$tag]: $message');
   }
 
   /// Get user-friendly message from exception.

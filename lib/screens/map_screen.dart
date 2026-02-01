@@ -1135,10 +1135,9 @@ class _MapScreenState extends State<MapScreen> {
   // ===============================================================
   @override
   Widget build(BuildContext context) {
-    // RAIN MODE: Calculate button sizes (30% of screen height)
-    final double screenHeight = MediaQuery.of(context).size.height;
-    final double buttonSize = _rainModeEnabled ? screenHeight * 0.12 : 56.0;
-    final double largeButtonSize = _rainModeEnabled ? screenHeight * 0.15 : 72.0;
+    // RAIN MODE: Standard sizes enforced
+    final double buttonSize = 56.0;
+    final double largeButtonSize = 72.0;
     
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5), // Neutral grey background
@@ -1158,37 +1157,37 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ],
         ),
-        backgroundColor: _rainModeEnabled ? Colors.black : Colors.white,
-        foregroundColor: _rainModeEnabled ? Colors.white : Colors.black87,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
         elevation: 2,
         actions: [
           // RAIN MODE TOGGLE
           IconButton(
             icon: Icon(
               _rainModeEnabled ? Icons.wb_sunny : Icons.water_drop,
-              color: _rainModeEnabled ? Colors.yellow : Colors.blue,
+              color: Colors.blue,
             ),
             onPressed: _toggleRainMode,
             tooltip: 'Toggle Rain Mode',
-            iconSize: _rainModeEnabled ? 32 : 24,
+            iconSize: 24, // Standard size
           ),
           IconButton(
             icon: Icon(
               Icons.directions_bike,
-              color: _rainModeEnabled ? Colors.white : Colors.black87,
+              color: Colors.black87,
             ),
             onPressed: _showVehicleSelectionDialog,
             tooltip: 'Change Vehicle',
-            iconSize: _rainModeEnabled ? 32 : 24,
+            iconSize: 24, // Standard size
           ),
           IconButton(
             icon: Icon(
               Icons.language,
-              color: _rainModeEnabled ? Colors.white : Colors.black87,
+              color: Colors.black87,
             ),
             onPressed: _showLanguageSelectionDialog,
             tooltip: 'Voice Language',
-            iconSize: _rainModeEnabled ? 32 : 24,
+            iconSize: 24, // Standard size
           ),
         ],
       ),
@@ -1211,21 +1210,11 @@ class _MapScreenState extends State<MapScreen> {
               ),
               
               // RAIN MODE OVERLAY (Border only)
-              if (_rainModeEnabled)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.amber.withValues(alpha: 0.3),
-                          width: 8.0,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              // NO RAIN MODE OVERLAY (Removed)
 
-              PolylineLayer(polylines: [
+              PolylineLayer(
+                 polylines: [
+                if (routePoints.isNotEmpty) 
                 Polyline(
                   points: routePoints,
                   strokeWidth: _selectedVehicle == VehicleType.bike ? 8.0 : 5.0,
@@ -1352,11 +1341,11 @@ class _MapScreenState extends State<MapScreen> {
                     child: Icon(
                       Icons.sos,
                       color: Colors.white,
-                      size: _rainModeEnabled ? 40 : 30,
+                      size: 30, // Standard size
                     ),
                   ),
                 ),
-                SizedBox(height: _rainModeEnabled ? 24 : 16), // Increased spacing for Rain Mode
+                SizedBox(height: 16), // Standard spacing
                 
                 // RECENTER BUTTON
                 SizedBox(
@@ -1369,11 +1358,11 @@ class _MapScreenState extends State<MapScreen> {
                     child: Icon(
                       Icons.gps_fixed,
                       color: Colors.black87,
-                      size: _rainModeEnabled ? 30 : 24,
+                      size: 24, // Standard size
                     ),
                   ),
                 ),
-                SizedBox(height: _rainModeEnabled ? 20 : 16),
+                SizedBox(height: 16),
                 
                 // NAVIGATION START/STOP
                 if (_isNavigating)
@@ -1386,14 +1375,14 @@ class _MapScreenState extends State<MapScreen> {
                       icon: Icon(
                         Icons.stop,
                         color: Colors.white,
-                        size: _rainModeEnabled ? 24 : 18,
+                        size: 18, // Standard size
                       ),
                       label: Text(
                         "Exit",
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: _rainModeEnabled ? 16 : 14,
+                          fontSize: 14, // Standard size
                         ),
                       ),
                     ),
@@ -1408,21 +1397,21 @@ class _MapScreenState extends State<MapScreen> {
                       icon: Icon(
                         Icons.navigation,
                         color: Colors.white,
-                        size: _rainModeEnabled ? 24 : 18,
+                        size: 18, // Standard size
                       ),
                       label: Text(
                         "Start",
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: _rainModeEnabled ? 16 : 14,
+                          fontSize: 14, // Standard size
                         ),
                       ),
                     ),
                   ),
                   
                 if (routePoints.isNotEmpty || _isNavigating) ...[
-                   SizedBox(height: _rainModeEnabled ? 20 : 16),
+                   SizedBox(height: 16),
                    // STEPS BUTTON
                    SizedBox(
                       height: buttonSize,
@@ -1432,13 +1421,13 @@ class _MapScreenState extends State<MapScreen> {
                         icon: Icon(
                           Icons.format_list_bulleted,
                           color: Colors.white,
-                          size: _rainModeEnabled ? 24 : 18,
+                          size: 18, // Standard size
                         ),
                         label: Text(
                           "Steps",
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: _rainModeEnabled ? 16 : 14,
+                            fontSize: 14, // Standard size
                           ),
                         ),
                          onPressed: _showDirectionsSheet,
@@ -1463,7 +1452,7 @@ class _MapScreenState extends State<MapScreen> {
                 child: Icon(
                   Icons.warning_amber_rounded,
                   color: Colors.white,
-                  size: _rainModeEnabled ? 30: 20,
+                  size: 20, // Standard size
                 ),
               ),
             ),
@@ -1476,39 +1465,37 @@ class _MapScreenState extends State<MapScreen> {
             right: 20,
             child: Card(
               color: Colors.white, // Always White
-              elevation: _rainModeEnabled ? 12 : 4,
+              elevation: 4, // Standard elevation
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(
-                  color: _rainModeEnabled 
-                      ? Colors.blueAccent 
-                      : Colors.grey.shade300,
-                  width: _rainModeEnabled ? 3 : 1,
+                  color: Colors.grey.shade300,
+                  width: 1,
                 ),
               ),
               child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: 16.0,
-                  vertical: _rainModeEnabled ? 12.0 : 8.0,
+                  vertical: 8.0, // Standard padding
                 ),
                 child: Row(
                   children: [
                     if (isLoading)
                       SizedBox(
-                        width: _rainModeEnabled ? 18 : 12,
-                        height: _rainModeEnabled ? 18 : 12,
+                        width: 12, // Standard size
+                        height: 12, // Standard size
                         child: CircularProgressIndicator(
-                          color: _rainModeEnabled ? Colors.blue : Colors.blue,
-                          strokeWidth: _rainModeEnabled ? 3 : 2,
+                          color: Colors.blue,
+                          strokeWidth: 2, // Standard width
                         ),
                       )
                     else
                       Icon(
                         Icons.check_circle, // Always show success icon
                         color: routeColor,
-                        size: _rainModeEnabled ? 18 : 12,
+                        size: 12, // Standard size
                       ),
-                    SizedBox(width: _rainModeEnabled ? 16 : 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -1519,7 +1506,7 @@ class _MapScreenState extends State<MapScreen> {
                             style: TextStyle(
                               color: Colors.black87, // Always Black text
                               fontWeight: FontWeight.bold,
-                              fontSize: _rainModeEnabled ? 14 : 10,
+                              fontSize: 10, // Standard size
                             ),
                           ),
                           if (routeStats.isNotEmpty)
@@ -1527,7 +1514,7 @@ class _MapScreenState extends State<MapScreen> {
                               "$routeStats  |  $weatherForecast",
                               style: TextStyle(
                                 color: Colors.grey[600], // Always Grey text
-                                fontSize: _rainModeEnabled ? 10 : 8,
+                                fontSize: 8, // Standard size
                               ),
                             ),
                         ],
