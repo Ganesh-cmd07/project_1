@@ -143,7 +143,7 @@ class FirebaseService {
       
     } catch (e) {
       ErrorHandler.logError(_tag, '❌ Hazard submission error: $e');
-      return false;
+      rethrow; // RETHROW so MapScreen can show specific error
     }
   }
 
