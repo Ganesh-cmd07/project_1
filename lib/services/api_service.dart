@@ -751,4 +751,61 @@ class ApiService {
 
     return !invalidTerms.contains(lowerInput);
   }
+
+  // ==========================================
+  // 8. OFFLINE ROUTE PERSISTENCE
+  // ==========================================
+
+  /// Save the active route to local storage.
+  /// 
+  /// OFFLINE MODE: Enables route restoration if app crashes or restarts.
+  Future<void> saveActiveRoute(RouteModel route) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = json.encode(route.toJson());
+      await prefs.setString('active_route_data', jsonStr);
+      await prefs.setString('active_route_timestamp', DateTime.now().toIso8601String());
+      ErrorHandler.logError(_tag, 'Route saved to local storage');
+    } catch (e) {
+      ErrorHandler.logError(_tag, 'Failed to save route: $e');
+    }
+  }
+
+  /// Retrieve the saved route from local storage.
+  /// 
+  /// Returns null if no route exists or it's older than 4 hours (TTL).
+  Future<RouteModel?> getSavedRoute() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('active_route_data');
+      final timestampStr = prefs.getString('active_route_timestamp');
+
+      if (jsonStr == null || timestampStr == null) return null;
+
+      // check TTL (4 hours)
+      final timestamp = DateTime.parse(timestampStr);
+      if (DateTime.now().difference(timestamp).inHours > 4) {
+        await clearSavedRoute();
+        return null;
+      }
+
+      final data = json.decode(jsonStr) as Map<String, dynamic>;
+      return RouteModel.fromJson(data);
+    } catch (e) {
+      ErrorHandler.logError(_tag, 'Failed to restore route: $e');
+      return null;
+    }
+  }
+
+  /// Clear the saved route from local storage.
+  Future<void> clearSavedRoute() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('active_route_data');
+      await prefs.remove('active_route_timestamp');
+      ErrorHandler.logError(_tag, 'Saved route cleared');
+    } catch (e) {
+      ErrorHandler.logError(_tag, 'Failed to clear saved route: $e');
+    }
+  }
 }

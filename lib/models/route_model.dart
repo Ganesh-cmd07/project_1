@@ -251,6 +251,48 @@ class RouteModel {
     required this.hasUnpavedRoads,
   });
 
+  /// Convert to JSON for offline storage.
+  Map<String, dynamic> toJson() {
+    return {
+      'points': points.map((p) => {'lat': p.latitude, 'lon': p.longitude}).toList(),
+      'steps': steps.map((s) => s.toJson()).toList(),
+      'weatherAlerts': weatherAlerts.map((w) => w.toJson()).toList(),
+      'elevationDips': elevationDips.map((e) => e.toJson()).toList(),
+      'distanceMeters': distanceMeters,
+      'durationMinutes': durationMinutes,
+      'durationSeconds': durationSeconds,
+      'riskLevel': riskLevel,
+      'isRaining': isRaining,
+      'hydroplaningRisk': hydroplaningRisk,
+      'hasUnpavedRoads': hasUnpavedRoads,
+    };
+  }
+
+  /// Create from stored JSON.
+  factory RouteModel.fromJson(Map<String, dynamic> json) {
+    return RouteModel(
+      points: (json['points'] as List<dynamic>)
+          .map((p) => LatLng(p['lat'], p['lon']))
+          .toList(),
+      steps: (json['steps'] as List<dynamic>)
+          .map((s) => RouteStep.fromJson(s))
+          .toList(),
+      weatherAlerts: (json['weatherAlerts'] as List<dynamic>)
+          .map((w) => WeatherAlert.fromJson(w))
+          .toList(),
+      elevationDips: (json['elevationDips'] as List<dynamic>)
+          .map((e) => ElevationDip.fromJson(e))
+          .toList(),
+      distanceMeters: (json['distanceMeters'] as num).toDouble(),
+      durationMinutes: json['durationMinutes'] as int,
+      durationSeconds: json['durationSeconds'] as int,
+      riskLevel: json['riskLevel'] as String,
+      isRaining: json['isRaining'] as bool,
+      hydroplaningRisk: json['hydroplaningRisk'] as bool? ?? false,
+      hasUnpavedRoads: json['hasUnpavedRoads'] as bool? ?? false,
+    );
+  }
+
   /// Create from OSRM API response.
   factory RouteModel.fromOsrmJson(Map<String, dynamic> json) {
     final geometry = json['geometry'] as Map<String, dynamic>?;
@@ -382,6 +424,24 @@ class RouteStep {
     required this.location,
   });
 
+  /// Convert to JSON.
+  Map<String, dynamic> toJson() => {
+    'instruction': instruction,
+    'distance': distance,
+    'maneuverType': maneuverType,
+    'location': location,
+  };
+
+  /// Create from JSON.
+  factory RouteStep.fromJson(Map<String, dynamic> json) {
+    return RouteStep(
+      instruction: json['instruction'],
+      distance: (json['distance'] as num).toDouble(),
+      maneuverType: json['maneuverType'],
+      location: (json['location'] as List<dynamic>).map((e) => (e as num).toDouble()).toList(),
+    );
+  }
+
   /// Create from OSRM step JSON.
   factory RouteStep.fromOsrmJson(Map<String, dynamic> json) {
     final maneuver = json['maneuver'] as Map<String, dynamic>?;
@@ -432,6 +492,26 @@ class WeatherAlert {
     required this.time,
     this.rainIntensity,
   });
+
+  Map<String, dynamic> toJson() => {
+    'point': {'lat': point.latitude, 'lon': point.longitude},
+    'weatherCode': weatherCode,
+    'description': description,
+    'temperature': temperature,
+    'time': time,
+    'rainIntensity': rainIntensity,
+  };
+
+  factory WeatherAlert.fromJson(Map<String, dynamic> json) {
+    return WeatherAlert(
+      point: LatLng(json['point']['lat'], json['point']['lon']),
+      weatherCode: json['weatherCode'],
+      description: json['description'],
+      temperature: (json['temperature'] as num).toDouble(),
+      time: json['time'],
+      rainIntensity: (json['rainIntensity'] as num?)?.toDouble(),
+    );
+  }
 }
 
 // ==========================================
@@ -459,4 +539,20 @@ class ElevationDip {
     required this.isHighRisk,
     this.distanceFromStart = 0.0,
   });
+
+  Map<String, dynamic> toJson() => {
+    'point': {'lat': point.latitude, 'lon': point.longitude},
+    'depthMeters': depthMeters,
+    'isHighRisk': isHighRisk,
+    'distanceFromStart': distanceFromStart,
+  };
+
+  factory ElevationDip.fromJson(Map<String, dynamic> json) {
+    return ElevationDip(
+      point: LatLng(json['point']['lat'], json['point']['lon']),
+      depthMeters: (json['depthMeters'] as num).toDouble(),
+      isHighRisk: json['isHighRisk'],
+      distanceFromStart: (json['distanceFromStart'] as num).toDouble(),
+    );
+  }
 }

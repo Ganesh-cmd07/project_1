@@ -129,6 +129,9 @@ class _MapScreenState extends State<MapScreen> {
         _liveTrackingEnabled) {
       _startLiveTracking();
     }
+    
+    // OFFLINE MODE: Check for saved route
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForSavedRoute());
   }
 
   /// Initializes the text-to-speech engine.
@@ -143,6 +146,98 @@ class _MapScreenState extends State<MapScreen> {
       // Fallback to English if selected language fails
       await flutterTts.setLanguage('en-IN');
       ErrorHandler.logError('MapScreen', 'TTS initialization error, falling back to English: $e');
+    }
+  }
+
+  /// Restores saved route if available (Offline capabilities).
+  Future<void> _checkForSavedRoute() async {
+    final savedRoute = await api.getSavedRoute();
+    if (savedRoute != null && mounted) {
+      // Ask user if they want to restore
+      final shouldRestore = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Resume Navigation?'),
+          content: const Text('Found an active route from your last session. Would you like to resume?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Resume'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldRestore == true && mounted) {
+        setState(() {
+          _currentRoute = savedRoute;
+          routePoints = savedRoute.points;
+          _routeInstructions = savedRoute.steps.map((step) {
+            return {
+              'instruction': step.instruction,
+              'distance': step.distance,
+              'maneuver': {
+                'type': step.maneuverType,
+                'location': step.location
+              }
+            };
+          }).toList();
+          
+          // Restore visual elements
+          _weatherMarkers = savedRoute.weatherAlerts.map<Marker>((alert) {
+             return Marker(
+               point: alert.point,
+               width: 80, 
+               height: 80,
+               child: Column(
+                 children: [
+                   Icon(Icons.cloud, color: _rainModeEnabled ? Colors.lightBlueAccent : Colors.blue, size: 30),
+                   Container(
+                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                     decoration: BoxDecoration(
+                       color: Colors.white,
+                       borderRadius: BorderRadius.circular(4),
+                       border: Border.all(color: Colors.grey.shade300),
+                     ),
+                     child: Text(
+                       '${alert.temperature.toStringAsFixed(0)}°',
+                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
+                     ),
+                   ),
+                 ],
+               ),
+             );
+          }).toList();
+          
+          _dipMarkers = savedRoute.elevationDips.map<Marker>((dip) {
+            return Marker(
+              point: dip.point,
+              width: 60,
+              height: 60,
+              child: Icon(Icons.water, color: dip.isHighRisk ? Colors.red : Colors.orange, size: 35),
+            );
+          }).toList();
+
+          _isNavigating = true; // Auto-start navigation
+          statusMessage = "Route restored";
+          
+          // Re-center map
+          if (routePoints.isNotEmpty) {
+             mapController.fitCamera(CameraFit.bounds(
+                bounds: LatLngBounds.fromPoints(routePoints),
+                padding: const EdgeInsets.all(50)));
+          }
+        });
+        
+        _startLiveTracking();
+        _speak("Resuming navigation.");
+      } else {
+        await api.clearSavedRoute();
+      }
     }
   }
 
@@ -561,6 +656,7 @@ class _MapScreenState extends State<MapScreen> {
     });
     _speak("Navigation stopped.");
     _restartGPSTracking(); // Restore normal GPS polling
+    api.clearSavedRoute(); // Clear offline cache
     
     if (routePoints.isNotEmpty) {
       mapController.fitCamera(CameraFit.bounds(
@@ -756,6 +852,9 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         }
+        
+        // OFFLINE MODE: Save active route
+        api.saveActiveRoute(bestRoute);
       }
     } catch (e) {
       if (mounted) {
@@ -1107,15 +1206,60 @@ class _MapScreenState extends State<MapScreen> {
                     liveHazards.addAll(snapshot.data!.docs.map((doc) {
                       final data = doc.data() as Map<String, dynamic>;
                       final locationData = data['location'] as Map<String, dynamic>;
+                      final status = data['status'] as String? ?? 'pending';
+                      final isVerified = status == 'verified';
+
                       return Marker(
                         point: LatLng(
                           locationData['latitude'] as double,
                           locationData['longitude'] as double,
                         ),
-                        child: Icon(
-                          Icons.warning,
-                          color: _rainModeEnabled ? Colors.red : Colors.orange,
-                          size: _rainModeEnabled ? 40 : 30,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Dotted/Glow Effect for Unverified
+                            if (!isVerified)
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.orange.withOpacity(0.5),
+                                    width: 2,
+                                    style: BorderStyle.solid, // Flutter default doesn't support dotted easily here
+                                  ),
+                                ),
+                                width: _rainModeEnabled ? 45 : 35,
+                                height: _rainModeEnabled ? 45 : 35,
+                              ),
+                              
+                            // Icon
+                            Icon(
+                              // Outline for pending, Fill for verified
+                              isVerified ? Icons.warning : Icons.warning_amber_rounded,
+                              color: isVerified 
+                                  ? (_rainModeEnabled ? Colors.red : Colors.red) 
+                                  : (_rainModeEnabled ? Colors.orange : Colors.orange),
+                              size: _rainModeEnabled ? 40 : 30,
+                            ),
+                            
+                            // Question mark badge for pending
+                            if (!isVerified)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.question_mark,
+                                    size: 10,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     }));
