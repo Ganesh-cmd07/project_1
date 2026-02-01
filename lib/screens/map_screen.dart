@@ -1223,7 +1223,7 @@ class _MapScreenState extends State<MapScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.orange.withOpacity(0.5),
+                                    color: Colors.orange.withValues(alpha: 0.5),
                                     width: 2,
                                     style: BorderStyle.solid, // Flutter default doesn't support dotted easily here
                                   ),

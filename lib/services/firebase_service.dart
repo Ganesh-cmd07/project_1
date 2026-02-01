@@ -345,5 +345,5 @@ class FirebaseService {
     );
   }
 
-  static String _getFirebaseErrorMessage(FirebaseException e) => e.message ?? 'Unknown error';
+
 }

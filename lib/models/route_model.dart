@@ -272,7 +272,13 @@ class RouteModel {
   factory RouteModel.fromJson(Map<String, dynamic> json) {
     return RouteModel(
       points: (json['points'] as List<dynamic>)
-          .map((p) => LatLng(p['lat'], p['lon']))
+          .map((p) {
+            final map = p as Map<String, dynamic>;
+            return LatLng(
+              (map['lat'] as num).toDouble(),
+              (map['lon'] as num).toDouble(),
+            );
+          })
           .toList(),
       steps: (json['steps'] as List<dynamic>)
           .map((s) => RouteStep.fromJson(s))
@@ -503,12 +509,16 @@ class WeatherAlert {
   };
 
   factory WeatherAlert.fromJson(Map<String, dynamic> json) {
+    final pointData = json['point'] as Map<String, dynamic>;
     return WeatherAlert(
-      point: LatLng(json['point']['lat'], json['point']['lon']),
-      weatherCode: json['weatherCode'],
-      description: json['description'],
+      point: LatLng(
+        (pointData['lat'] as num).toDouble(), 
+        (pointData['lon'] as num).toDouble()
+      ),
+      weatherCode: json['weatherCode'] as int,
+      description: json['description'] as String,
       temperature: (json['temperature'] as num).toDouble(),
-      time: json['time'],
+      time: json['time'] as String,
       rainIntensity: (json['rainIntensity'] as num?)?.toDouble(),
     );
   }
@@ -548,10 +558,14 @@ class ElevationDip {
   };
 
   factory ElevationDip.fromJson(Map<String, dynamic> json) {
+    final pointData = json['point'] as Map<String, dynamic>;
     return ElevationDip(
-      point: LatLng(json['point']['lat'], json['point']['lon']),
+      point: LatLng(
+        (pointData['lat'] as num).toDouble(),
+        (pointData['lon'] as num).toDouble()
+      ),
       depthMeters: (json['depthMeters'] as num).toDouble(),
-      isHighRisk: json['isHighRisk'],
+      isHighRisk: json['isHighRisk'] as bool,
       distanceFromStart: (json['distanceFromStart'] as num).toDouble(),
     );
   }
