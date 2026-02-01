@@ -1135,6 +1135,7 @@ class _MapScreenState extends State<MapScreen> {
     final double largeButtonSize = _rainModeEnabled ? screenHeight * 0.15 : 72.0;
     
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5), // Neutral grey background
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Row(
@@ -1147,7 +1148,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             if (_rainModeEnabled) ...[
               const SizedBox(width: 10),
-              Icon(Icons.water_drop, color: _rainModeEnabled ? Colors.blueAccent : Colors.blue),
+              const Icon(Icons.water_drop, color: Colors.blueAccent),
             ],
           ],
         ),
@@ -1202,6 +1203,22 @@ class _MapScreenState extends State<MapScreen> {
                 subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.rainsafe.navigator',
               ),
+              
+              // RAIN MODE OVERLAY (Border only)
+              if (_rainModeEnabled)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.3),
+                          width: 8.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
               PolylineLayer(polylines: [
                 Polyline(
                   points: routePoints,
@@ -1343,7 +1360,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
-                SizedBox(height: _rainModeEnabled ? 20 : 16),
+                SizedBox(height: _rainModeEnabled ? 24 : 16), // Increased spacing for Rain Mode
                 
                 // RECENTER BUTTON
                 SizedBox(

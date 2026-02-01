@@ -105,7 +105,8 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
 
                 const SizedBox(height: 8),
 
-                // Search Button
+                // Search Button (Removed as per user request)
+                /*
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -124,6 +125,7 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
                         style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
+                */
               ],
             ),
           ),
@@ -177,6 +179,13 @@ class _RainSafeSearchWidgetState extends State<RainSafeSearchWidget> {
     return TextField(
       controller: controller,
       style: const TextStyle(color: Colors.white),
+      textInputAction: isStart ? TextInputAction.next : TextInputAction.search,
+      onSubmitted: (val) {
+        if (!isStart) {
+          setState(() => _showSuggestions = false);
+          widget.onSearchPressed();
+        }
+      },
       onChanged: (val) => _onTextChanged(val, isStart),
       onTap: () {
         if (controller.text.isEmpty) _onTextChanged("", isStart);
