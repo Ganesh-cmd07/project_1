@@ -1136,8 +1136,8 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     // RAIN MODE: Standard sizes enforced
-    final double buttonSize = 56.0;
-    final double largeButtonSize = 72.0;
+    const double buttonSize = 56.0;
+    const double largeButtonSize = 72.0;
     
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5), // Neutral grey background
@@ -1172,7 +1172,7 @@ class _MapScreenState extends State<MapScreen> {
             iconSize: 24, // Standard size
           ),
           IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.directions_bike,
               color: Colors.black87,
             ),
@@ -1181,7 +1181,7 @@ class _MapScreenState extends State<MapScreen> {
             iconSize: 24, // Standard size
           ),
           IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.language,
               color: Colors.black87,
             ),
@@ -1350,14 +1350,14 @@ class _MapScreenState extends State<MapScreen> {
                     heroTag: "sos_btn",
                     backgroundColor: Colors.red,
                     onPressed: _showSOSDialog,
-                    child: Icon(
+                    child: const Icon(
                       Icons.sos,
                       color: Colors.white,
                       size: 30, // Standard size
                     ),
                   ),
                 ),
-                SizedBox(height: 16), // Standard spacing
+                const SizedBox(height: 16), // Standard spacing
                 
                 // RECENTER BUTTON
                 SizedBox(
@@ -1367,14 +1367,14 @@ class _MapScreenState extends State<MapScreen> {
                     heroTag: "recenter_btn",
                     backgroundColor: Colors.white,
                     onPressed: _recenterMap,
-                    child: Icon(
+                    child: const Icon(
                       Icons.gps_fixed,
                       color: Colors.black87,
                       size: 24, // Standard size
                     ),
                   ),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 
                 // NAVIGATION START/STOP
                 if (_isNavigating)
@@ -1384,12 +1384,12 @@ class _MapScreenState extends State<MapScreen> {
                       heroTag: "stop_nav_btn",
                       onPressed: _stopNavigation,
                       backgroundColor: Colors.red,
-                      icon: Icon(
+                      icon: const Icon(
                         Icons.stop,
                         color: Colors.white,
                         size: 18, // Standard size
                       ),
-                      label: Text(
+                      label: const Text(
                         "Exit",
                         style: TextStyle(
                           color: Colors.white,
@@ -1406,12 +1406,12 @@ class _MapScreenState extends State<MapScreen> {
                       heroTag: "start_nav_btn",
                       onPressed: _startNavigation,
                       backgroundColor: Colors.green,
-                      icon: Icon(
+                      icon: const Icon(
                         Icons.navigation,
                         color: Colors.white,
                         size: 18, // Standard size
                       ),
-                      label: Text(
+                      label: const Text(
                         "Start",
                         style: TextStyle(
                           color: Colors.white,
@@ -1423,19 +1423,19 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   
                 if (routePoints.isNotEmpty || _isNavigating) ...[
-                   SizedBox(height: 16),
+                   const SizedBox(height: 16),
                    // STEPS BUTTON
                    SizedBox(
                       height: buttonSize,
                       child: FloatingActionButton.extended(
                         heroTag: "steps_btn",
                         backgroundColor: Colors.blueAccent,
-                        icon: Icon(
+                        icon: const Icon(
                           Icons.format_list_bulleted,
                           color: Colors.white,
                           size: 18, // Standard size
                         ),
-                        label: Text(
+                        label: const Text(
                           "Steps",
                           style: TextStyle(
                             color: Colors.white,
@@ -1461,7 +1461,7 @@ class _MapScreenState extends State<MapScreen> {
                 heroTag: 'report',
                 onPressed: _showReportHazardDialog,
                 backgroundColor: Colors.orange, // Always Orange
-                child: Icon(
+                child: const Icon(
                   Icons.warning_amber_rounded,
                   color: Colors.white,
                   size: 20, // Standard size
@@ -1486,14 +1486,14 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
               child: Padding(
-                padding: EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   horizontal: 16.0,
                   vertical: 8.0, // Standard padding
                 ),
                 child: Row(
                   children: [
                     if (isLoading)
-                      SizedBox(
+                      const SizedBox(
                         width: 12, // Standard size
                         height: 12, // Standard size
                         child: CircularProgressIndicator(
@@ -1507,7 +1507,7 @@ class _MapScreenState extends State<MapScreen> {
                         color: routeColor,
                         size: 12, // Standard size
                       ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -1515,7 +1515,7 @@ class _MapScreenState extends State<MapScreen> {
                         children: [
                           Text(
                             statusMessage,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.black87, // Always Black text
                               fontWeight: FontWeight.bold,
                               fontSize: 10, // Standard size
