@@ -20,29 +20,35 @@ class FirebaseService {
   static const String _usersCollection = 'users'; // New: To track reputation
   static const Duration _reportExpirationHours = Duration(hours: 4);
 
-  static late final FirebaseFirestore _firestore;
-  static late final FirebaseAuth _auth;
+
+  
+  static FirebaseFirestore? _firestoreInstance;
+  static FirebaseAuth? _authInstance;
+
+  static FirebaseFirestore get _firestore => _firestoreInstance ??= FirebaseFirestore.instance;
+  static FirebaseAuth get _auth => _authInstance ??= FirebaseAuth.instance;
 
   /// Initialize Firebase services (Firestore + Auth).
   static Future<void> initialize() async {
     try {
-      _firestore = FirebaseFirestore.instance;
-      _auth = FirebaseAuth.instance;
+      // Access getters to trigger initialization
+      final db = _firestore;
+      final auth = _auth;
       
-      await _firestore.enableNetwork();
+      await db.enableNetwork();
       
       // IDENTITY: Sign in anonymously to track user
-      if (_auth.currentUser == null) {
-        await _auth.signInAnonymously();
-        ErrorHandler.logError(_tag, 'Signed in anonymously: ${_auth.currentUser?.uid}');
+      if (auth.currentUser == null) {
+        await auth.signInAnonymously();
+        ErrorHandler.logError(_tag, 'Signed in anonymously: ${auth.currentUser?.uid}');
       } else {
-        ErrorHandler.logError(_tag, 'User already signed in: ${_auth.currentUser?.uid}');
+        ErrorHandler.logError(_tag, 'User already signed in: ${auth.currentUser?.uid}');
       }
 
       ErrorHandler.logError(_tag, 'Firebase initialized (Auth + Firestore)');
     } catch (e) {
       ErrorHandler.logError(_tag, 'Firebase initialization error: $e');
-      rethrow;
+      // Don't rethrow, let the app run even if analytics/hazards fail temporarily
     }
   }
 

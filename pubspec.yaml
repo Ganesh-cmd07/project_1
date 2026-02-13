@@ -30,6 +30,8 @@ dependencies:
 
   # UI Components
   cupertino_icons: ^1.0.2
+  flutter_compass: ^0.8.1
+  url_launcher: 6.2.6
 
 dev_dependencies:
   flutter_test:
@@ -39,6 +41,8 @@ dev_dependencies:
 # ✅ FIXED: Assets configuration
 flutter:
   uses-material-design: true
+
+
 
   # Logo and Images
   assets:
@@ -52,3 +56,6 @@ flutter:
   #       - asset: fonts/Roboto-Regular.ttf
   #       - asset: fonts/Roboto-Bold.ttf
   #         weight: 700
+
+dependency_overrides:
+  url_launcher_android: 6.3.10

@@ -452,11 +452,48 @@ class RouteStep {
   factory RouteStep.fromOsrmJson(Map<String, dynamic> json) {
     final maneuver = json['maneuver'] as Map<String, dynamic>?;
     final location = (maneuver?['location'] as List<dynamic>?) ?? [0.0, 0.0];
+    
+    // Construct readable instruction
+    String name = (json['name'] as String?) ?? '';
+    final String type = (maneuver?['type'] as String?) ?? 'continue';
+    final String modifier = (maneuver?['modifier'] as String?) ?? '';
+    
+    String instruction = name;
+    
+    // OSRM usually gives "type": "turn", "modifier": "left"
+    if (type == 'turn' || type == 'merge' || type == 'fork') {
+      if (modifier.isNotEmpty) {
+        String direction = modifier.replaceAll('_', ' ');
+        if (name.isNotEmpty) {
+          instruction = 'Turn $direction onto $name';
+        } else {
+          instruction = 'Turn $direction';
+        }
+      }
+    } else if (type == 'new name') {
+      instruction = 'Continue onto $name';
+    } else if (type == 'depart') {
+       instruction = 'Depart';
+    } else if (type == 'arrive') {
+       instruction = 'Arrive at destination';
+    } else if (type == 'roundabout') {
+       final exit = maneuver?['exit'] ?? 1;
+       instruction = 'Take exit $exit at roundabout';
+    } else {
+       // Fallback
+       if (name.isNotEmpty) {
+         instruction = 'Continue onto $name';
+       } else if (modifier.isNotEmpty) {
+         instruction = 'Continue $modifier';
+       } else {
+         instruction = type; // e.g. "continue"
+       }
+    }
 
     return RouteStep(
-      instruction: (json['name'] as String?) ?? 'Continue',
+      instruction: instruction,
       distance: (json['distance'] as num?)?.toDouble() ?? 0.0,
-      maneuverType: (maneuver?['type'] as String?) ?? 'continue',
+      maneuverType: type,
       location: [
         (location[0] as num).toDouble(),
         (location[1] as num).toDouble(),

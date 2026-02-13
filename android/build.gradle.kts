@@ -2,18 +2,17 @@
 // Supports: flutter_map, geolocator, flutter_tts, shared_preferences, permission_handler
 
 plugins {
-    id("com.android.application") version "8.1.0" apply false
-    id("com.android.library") version "8.1.0" apply false
-    id("org.jetbrains.kotlin.android") version "1.9.10" apply false
+    id("com.android.application") version "8.6.0" apply false
+    id("com.android.library") version "8.6.0" apply false
+    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
     id("dev.flutter.flutter-gradle-plugin") apply false
-    id("com.google.gms.google-services") version "4.4.0" apply false // Keep only this one
+    id("com.google.gms.google-services") version "4.4.0" apply false
 }
 
 allprojects {
     repositories {
         google()
         mavenCentral()
-        jcenter()
         maven {
             url = uri("https://jitpack.io")
         }
@@ -22,40 +21,54 @@ allprojects {
 
 // Configure common Android settings for all sub-projects
 subprojects {
-    afterEvaluate { project ->
+    val project = this
+    project.afterEvaluate {
         if (project.plugins.hasPlugin("com.android.application") || 
             project.plugins.hasPlugin("com.android.library")) {
             
-            extensions.configure<com.android.build.gradle.BaseExtension> {
-                // Android SDK Versions
-                compileSdkVersion = 34
-                ndkVersion = "26.1.10909125"
-                
-                // Default Config
-                defaultConfig {
-                    minSdk = 21
-                    targetSdk = 34
-                    vectorDrawables.useSupportLibrary = true
+            // Use dynamic dispatch to avoid compilation issues with missing accessors in root project
+            val android = project.extensions.getByName("android")
+            
+            if (android is com.android.build.gradle.BaseExtension) {
+                android.apply {
+                    compileSdkVersion(35)
+                    
+                    defaultConfig {
+                        minSdk = 24
+                        targetSdk = 35
+                        try {
+                            // Safe access for vectorDrawables
+                            val vectorDrawables = this.javaClass.getMethod("getVectorDrawables").invoke(this)
+                            vectorDrawables.javaClass.getMethod("setUseSupportLibrary", Boolean::class.javaPrimitiveType).invoke(vectorDrawables, true)
+                        } catch (e: Exception) {
+                            // Ignore if not present
+                        }
+                    }
+                    
+                    compileOptions {
+                        sourceCompatibility = JavaVersion.VERSION_17
+                        targetCompatibility = JavaVersion.VERSION_17
+                    }
                 }
-                
-                // Compile Options
-                compileOptions {
-                    sourceCompatibility = JavaVersion.VERSION_1_8
-                    targetCompatibility = JavaVersion.VERSION_1_8
-                }
-                
-                // Kotlin Options
+            }
+            
+            // Configure build features safely
+            try {
+                val android = project.extensions.getByName("android")
+                val buildFeatures = android.javaClass.getMethod("getBuildFeatures").invoke(android)
+                buildFeatures.javaClass.getMethod("setBuildConfig", Boolean::class.javaPrimitiveType).invoke(buildFeatures, true)
+            } catch (e: Exception) {
+                 // Ignore
+            }
+
+            // Configure Kotlin JVM toolchain
+            project.extensions.findByType(org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension::class.java)?.apply {
+                jvmToolchain(17)
+            }
+            
+            project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach {
                 kotlinOptions {
-                    jvmTarget = "1.8"
-                }
-                
-                // Build Features for Flutter packages
-                buildFeatures {
-                    viewBinding = false
-                    aidl = false
-                    renderScript = false
-                    resValues = false
-                    shaders = false
+                    jvmTarget = "17"
                 }
             }
         }
@@ -63,9 +76,9 @@ subprojects {
 }
 
 // Build directory configuration
-rootProject.buildDir = File(rootProject.projectDir, "build")
+rootProject.layout.buildDirectory.value(rootProject.layout.projectDirectory.dir("../build"))
 subprojects {
-    project.buildDir = File("${rootProject.buildDir}/${project.name}")
+    project.layout.buildDirectory.value(rootProject.layout.buildDirectory.dir(project.name))
 }
 
 subprojects {
@@ -74,5 +87,5 @@ subprojects {
 
 // Clean task
 tasks.register<Delete>("clean") {
-    delete(rootProject.buildDir)
+    delete(rootProject.layout.buildDirectory)
 }
