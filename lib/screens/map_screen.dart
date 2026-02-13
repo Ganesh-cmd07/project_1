@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'dart:ui'; // For ImageFilter
+
+import 'package:geolocator/geolocator.dart'; 
+import 'package:flutter_compass/flutter_compass.dart'; // Added Compass
 import 'package:flutter_tts/flutter_tts.dart' hide ErrorHandler;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/api_service.dart';
 import '../services/firebase_service.dart';
 import '../models/route_model.dart';
 import '../utils/error_handler.dart';
+import 'package:url_launcher/url_launcher.dart'; // Added for calling functionality
+import '../widgets/vehicle_marker.dart'; // Added Vehicle Marker
+
+import '../theme/app_theme.dart';
 
 /// Navigation screen with vehicle-specific intelligence, SOS, and multi-language guidance.
 /// 
@@ -26,19 +35,25 @@ class MapScreen extends StatefulWidget {
 
   /// The destination for navigation.
   final String endPoint;
+  final String? simulateWeather; // 'rain', 'storm', 'clear'
+  final LatLng? startCoords;
+  final LatLng? endCoords;
 
   /// Creates a [MapScreen] for navigation.
   const MapScreen({
-    super.key,
-    this.startPoint = "Current Location",
-    this.endPoint = "",
+    super.key, 
+    required this.startPoint, 
+    required this.endPoint,
+    this.startCoords,
+    this.endCoords,
+    this.simulateWeather,
   });
 
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   // SERVICES
   final ApiService api = ApiService();
   final MapController mapController = MapController();
@@ -53,8 +68,12 @@ class _MapScreenState extends State<MapScreen> {
   late final TextEditingController _endController;
 
   // STATE VARIABLES
-  StreamSubscription<LatLng>? _positionSub;
+  // STATE VARIABLES
+  StreamSubscription<Position>? _positionSub;
+  StreamSubscription<CompassEvent>? _compassSub; // Compass subscription
   LatLng? _lastRouteCalcPosition;
+  double _currentHeading = 0.0; // Combined Heading (GPS or Compass)
+  double _deviceHeading = 0.0; // Magnetic Heading
 
   // VEHICLE MODE & SETTINGS
   VehicleType _selectedVehicle = VehicleType.bike;
@@ -84,11 +103,13 @@ class _MapScreenState extends State<MapScreen> {
   bool _isNavigating = false;
   int _currentStepIndex = 0;
   bool _hasSpokenCurrentStep = false;
+  bool _voiceAssistantEnabled = false; // Voice Assistant Toggle (Default OFF)
 
   // Map Data
   LatLng? _startCoord;
   LatLng? _destinationCoord;
   RouteModel? _currentRoute;
+  List<RouteModel> _alternativeRoutes = []; // Store alternatives
   List<LatLng> routePoints = [];
   List<Marker> _weatherMarkers = [];
   List<Marker> _dipMarkers = [];
@@ -131,14 +152,25 @@ class _MapScreenState extends State<MapScreen> {
     
     // OFFLINE MODE: Check for saved route, then auto-calc if needed
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _checkForSavedRoute();
+      // await _checkForSavedRoute(); // Disabled per user request
       
       // AUTO-CALCULATE: If no saved route restored, use the provided endpoint
       if (_currentRoute == null && widget.endPoint.isNotEmpty) {
         _calculateSafeRoute();
       }
     });
+
+    // Initialize Weather Animation
+    _weatherController = AnimationController(
+       vsync: this, 
+       duration: const Duration(milliseconds: 1000) // Loop every 1s
+    )..repeat();
+
+    _activeWeatherMode = widget.simulateWeather ?? 'clear';
   }
+
+  late AnimationController _weatherController;
+  String _activeWeatherMode = 'clear';
 
   /// Initializes the text-to-speech engine.
   /// 
@@ -146,7 +178,7 @@ class _MapScreenState extends State<MapScreen> {
   void _initVoice() async {
     try {
       await flutterTts.setLanguage(_selectedLanguage);
-      await flutterTts.setSpeechRate(0.5);
+      await flutterTts.setSpeechRate(0.7); // Faster speech rate
       await flutterTts.setVolume(1.0);
     } catch (e) {
       // Fallback to English if selected language fails
@@ -253,6 +285,7 @@ class _MapScreenState extends State<MapScreen> {
     _startController.dispose();
     _endController.dispose();
     flutterTts.stop();
+    _weatherController.dispose();
     super.dispose();
   }
 
@@ -268,6 +301,17 @@ class _MapScreenState extends State<MapScreen> {
     _speak(_rainModeEnabled ? "Rain mode activated" : "Rain mode deactivated");
   }
 
+  // VOICE ASSISTANT TOGGLE
+  void _toggleVoice() {
+    HapticFeedback.mediumImpact();
+    setState(() => _voiceAssistantEnabled = !_voiceAssistantEnabled);
+    if (_voiceAssistantEnabled) {
+      _speak("Voice assistant enabled");
+    } else {
+      flutterTts.stop(); // Stop immediately
+    }
+  }
+
   // ===============================================================
   // VEHICLE SELECTION DIALOG
   // ===============================================================
@@ -278,10 +322,10 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         title: const Text(
           'Select Vehicle Type',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -293,7 +337,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
               title: Text(
                 vehicle.displayName,
-                style: const TextStyle(color: Colors.black87),
+                style: const TextStyle(color: Colors.white),
               ),
               subtitle: Text(
                 'Rain threshold: ${vehicle.rainThreshold}mm/hr',
@@ -340,10 +384,10 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         title: const Text(
           'Voice Language',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -351,7 +395,7 @@ class _MapScreenState extends State<MapScreen> {
             return ListTile(
               title: Text(
                 entry.value,
-                style: const TextStyle(color: Colors.black87),
+                style: const TextStyle(color: Colors.white),
               ),
               tileColor: _selectedLanguage == entry.key
                   ? Colors.blue.withValues(alpha: 0.1)
@@ -405,20 +449,56 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.red[50],
+        backgroundColor: const Color(0xFF7F1D1D), // Dark Red
         title: Row(
           children: [
-            Icon(Icons.emergency, color: Colors.red[700], size: 30),
+            Icon(Icons.emergency, color: Colors.red[100], size: 30),
             const SizedBox(width: 10),
-            Text(
+            const Text(
               'Emergency SOS',
-              style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ],
         ),
-        content: Text(
-          'This will copy your location and route info to clipboard.\n\nYou can then paste it into SMS or WhatsApp.',
-          style: TextStyle(color: Colors.grey[800], fontSize: 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Choose an emergency service to call immediately or copy your location info.',
+              style: TextStyle(color: Colors.white70, fontSize: 16),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildSOSButton(
+                  label: "Ambulance",
+                  icon: Icons.medical_services,
+                  color: Colors.red[900]!,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _launchDialer("108");
+                  },
+                ),
+                _buildSOSButton(
+                  label: "Police",
+                  icon: Icons.local_police,
+                  color: Colors.blue[900]!,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _launchDialer("100");
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Divider(color: Colors.white24),
+            const SizedBox(height: 10),
+             Text(
+              'Or copy location info to clipboard:',
+              style: TextStyle(color: Colors.red[50], fontSize: 14),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -443,6 +523,51 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildSOSButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Column(
+      children: [
+        ElevatedButton(
+          onPressed: onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: color,
+            shape: const CircleBorder(),
+            padding: const EdgeInsets.all(20),
+            side: const BorderSide(color: Colors.white54, width: 2),
+            elevation: 5,
+          ),
+          child: Icon(icon, color: Colors.white, size: 30),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _launchDialer(String number) async {
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: number,
+    );
+    try {
+      await launchUrl(launchUri);
+    } catch (e) {
+      if (mounted) {
+        ErrorHandler.showError(context, 'Could not launch dialer: $e');
+      }
+    }
   }
 
   /// Sends an SOS message by copying location info to clipboard.
@@ -498,34 +623,85 @@ class _MapScreenState extends State<MapScreen> {
   /// Starts live GPS tracking with adaptive polling.
   /// 
   /// THERMAL/BATTERY GUARD: Adjusts GPS polling rate based on route conditions.
-  void _startLiveTracking() {
+  /// Starts live GPS tracking with adaptive polling and COMPASS.
+  /// 
+  /// THERMAL/BATTERY GUARD: Adjusts GPS polling rate based on route conditions.
+  /// Starts live GPS tracking with adaptive polling.
+  /// 
+  /// THERMAL/BATTERY GUARD: Adjusts GPS polling rate based on route conditions.
+  void _startLiveTracking() async {
     if (_positionSub != null) return;
 
-    // Determine initial GPS polling rate
+    // 0. CHECK PERMISSIONS FIRST
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) ErrorHandler.showError(context, 'Location permission denied');
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) ErrorHandler.showError(context, 'Location permission permanently denied. Enable in settings.');
+        return;
+      }
+    } catch (e) {
+      debugPrint("Permission check error: $e");
+    }
+
+    // 1. Start Compass for stationary rotation
+    _compassSub = FlutterCompass.events?.listen((event) {
+      if (!mounted) return;
+      setState(() {
+        _deviceHeading = event.heading ?? 0.0;
+        // Use compass if not navigating or speed is low (handled in GPS listener)
+        if (!_isNavigating) {
+             _currentHeading = _deviceHeading;
+        }
+      });
+    });
+
+    // 2. Determine initial GPS polling rate
     final int distanceFilter = GPSPollingConfig.getDistanceFilter(
       isNavigating: _isNavigating,
       isStraightaway: _isCurrentSegmentStraight,
       isInCity: true, // Default to high accuracy
     );
 
-    _positionSub = api.getPositionStream(distanceFilter: distanceFilter).listen(
+    _positionSub = api.getFullPositionStream(distanceFilter: distanceFilter).listen(
       (pos) async {
         if (!mounted) return;
         
+        final LatLng latLongPos = LatLng(pos.latitude, pos.longitude);
+        
         // POLYLINE SNAP: Snap GPS to nearest route point
         final LatLng displayPosition = _currentRoute != null 
-            ? _currentRoute!.snapToRoute(pos)
-            : pos;
+            ? _currentRoute!.snapToRoute(latLongPos)
+            : latLongPos;
         
         setState(() {
-          _startCoord = pos; // Actual GPS
+          _startCoord = latLongPos; // Actual GPS
           _snappedGPSPosition = displayPosition; // Visual display
+          
+          // SMART HEADING: Use GPS bearing if moving > 3km/h, else Compass
+          if (pos.speed > 0.8) { // ~3 km/h
+             _currentHeading = pos.heading;
+          } else {
+             _currentHeading = _deviceHeading;
+          }
         });
+        
+        // HEADING UP MODE: Rotate map during navigation
+        if (_isNavigating) {
+          mapController.rotate(-_currentHeading); // Counter-rotate map to keep Heading Up
+          mapController.move(displayPosition, 18.0); // Follow user
+        }
 
         if (_isNavigating &&
             _routeInstructions.isNotEmpty &&
             _currentStepIndex < _routeInstructions.length) {
-          await _checkNavigationStep(pos);
+          await _checkNavigationStep(latLongPos);
           
           // THERMAL/BATTERY GUARD: Update polling rate based on route segment
           if (_currentRoute != null) {
@@ -537,17 +713,20 @@ class _MapScreenState extends State<MapScreen> {
           }
         }
 
-        if (_destinationCoord != null) {
+        if (_destinationCoord != null && !_isNavigating) {
           const Distance distanceCalc = Distance();
           if (_lastRouteCalcPosition == null ||
-              distanceCalc.as(LengthUnit.Meter, _lastRouteCalcPosition!, pos) >
+              distanceCalc.as(LengthUnit.Meter, _lastRouteCalcPosition!, latLongPos) >
                   _recalcThresholdMeters) {
-            _lastRouteCalcPosition = pos;
+            _lastRouteCalcPosition = latLongPos;
             _calculateSafeRoute(isRefetch: true);
           }
         }
       },
-      onError: (e) => debugPrint('Position stream error: $e'),
+      onError: (e) {
+        debugPrint('Position stream error: $e');
+        if (mounted) ErrorHandler.showError(context, "GPS Error: $e");
+      }, 
     );
   }
 
@@ -615,7 +794,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// Speaks text using text-to-speech with English fallback.
+  /// Speaks text using text-to-speech with English fallback.
   Future<void> _speak(String text) async {
+    if (!_voiceAssistantEnabled) return; // Respect toggle
+
     try {
       await flutterTts.speak(text);
     } catch (e) {
@@ -633,6 +815,8 @@ class _MapScreenState extends State<MapScreen> {
   void _stopLiveTracking() {
     _positionSub?.cancel();
     _positionSub = null;
+    _compassSub?.cancel();
+    _compassSub = null;
     _lastRouteCalcPosition = null;
   }
 
@@ -640,15 +824,70 @@ class _MapScreenState extends State<MapScreen> {
   /// 
   /// HAPTIC FEEDBACK: Strong vibration on start.
   void _startNavigation() {
-    HapticFeedback.heavyImpact(); // HAPTIC FEEDBACK
-    setState(() => _isNavigating = true);
-    _speak("Starting navigation.");
-    if (_snappedGPSPosition != null) {
-      mapController.move(_snappedGPSPosition!, 18.0);
-    } else if (_startCoord != null) {
-      mapController.move(_startCoord!, 18.0);
+    print("🔘 DEBUG: _startNavigation called"); // FORCE LOG
+    
+    // FAILSAFE: Ensure we have a start position
+    // If GPS hasn't locked yet, use the route's starting point
+    LatLng? startPos = _snappedGPSPosition ?? _startCoord;
+    
+    if (startPos == null && routePoints.isNotEmpty) {
+       print("🔘 DEBUG: Start coords missing, using route start point as fallback");
+       startPos = routePoints.first;
+       
+       // Update _startCoord so SOS and other features work if needed
+       if (mounted) {
+         setState(() {
+           _startCoord = startPos;
+         });
+       }
     }
-    _restartGPSTracking(); // Update GPS polling for navigation mode
+
+    if (startPos == null) {
+         print("🔘 DEBUG: No start position available!");
+         ErrorHandler.showError(context, "Waiting for GPS signal...");
+         return; 
+    }
+
+    try {
+      print("🔘 DEBUG: Attempting to start navigation...");
+      
+      // 1. Update State FIRST to ensure UI responsiveness
+      setState(() => _isNavigating = true);
+      
+      // 2. Haptic Feedback (Non-blocking)
+      HapticFeedback.heavyImpact().catchError((e) => debugPrint("Haptic error: $e")); 
+      
+      // 3. Voice Announcement
+      _speak("Starting navigation.");
+
+      // 4. Move Map
+      debugPrint("DEBUG: Moving to start pos: $startPos");
+      mapController.move(startPos, 18.0);
+      mapController.rotate(-_currentHeading); 
+      
+      // 5. Restart Tracking
+      debugPrint("DEBUG: Navigation state set to true. Restarting GPS tracking...");
+      _restartGPSTracking(); 
+      
+      // SUCCESS FEEDBACK
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(
+             content: Text("Navigation Started"), 
+             backgroundColor: Colors.green,
+             duration: Duration(seconds: 1),
+           )
+        );
+      }
+      
+    } catch (e) {
+      debugPrint("DEBUG: Error in _startNavigation: $e");
+      ErrorHandler.logError('MapScreen', 'Start Nav Error: $e');
+      // Revert state if critical error
+      if (mounted) setState(() => _isNavigating = false);
+      
+      if (mounted) ErrorHandler.showError(context, "Failed to start: $e");
+    }
   }
 
   /// Stops turn-by-turn navigation.
@@ -661,6 +900,7 @@ class _MapScreenState extends State<MapScreen> {
       _isCurrentSegmentStraight = false;
     });
     _speak("Navigation stopped.");
+    mapController.rotate(0); // Reset rotation to North Up
     _restartGPSTracking(); // Restore normal GPS polling
     api.clearSavedRoute(); // Clear offline cache
     
@@ -701,12 +941,18 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     try {
-      // Geocoding
-      final LatLng? sCoord = (startText == 'Current Location' || startText.isEmpty)
-          ? (_startCoord ?? await api.getCurrentLocation())
-          : await api.getCoordinates(startText);
+      // Geocoding: PREFER PASSED COORDINATES if available
+      LatLng? sCoord = widget.startCoords;
+      if (sCoord == null) {
+          sCoord = (startText == 'Current Location' || startText.isEmpty)
+              ? (_startCoord ?? await api.getCurrentLocation())
+              : await api.getCoordinates(startText);
+      }
 
-      final LatLng? eCoord = await api.getCoordinates(endText);
+      LatLng? eCoord = widget.endCoords;
+      if (eCoord == null) {
+          eCoord = await api.getCoordinates(endText);
+      }
 
       if (sCoord == null || eCoord == null) {
         if (!isRefetch && mounted) {
@@ -721,7 +967,7 @@ class _MapScreenState extends State<MapScreen> {
 
       if (!isRefetch) await api.addToHistory(endText);
 
-      // Get Vehicle-Specific Routes
+      // Get Vehicle-Specific Routes (Alternatives)
       final List<RouteModel> allRoutes = await api.getSafeRoutesOptions(
         sCoord,
         eCoord,
@@ -743,12 +989,34 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      // Select best route
-      final RouteModel bestRoute = allRoutes.first;
-      
-      // Store current route for polyline snapping
-      _currentRoute = bestRoute;
+      if (mounted) {
+        setState(() {
+           _startCoord = sCoord;
+           _destinationCoord = eCoord;
+           _alternativeRoutes = allRoutes;
+        });
+      }
 
+      // Select best route (first one by default)
+      _selectRoute(allRoutes.first);
+      
+    } catch (e) {
+      if (mounted) {
+        ErrorHandler.logError('MapScreen', 'Route calc error: $e');
+        setState(() {
+          isLoading = false;
+          hasError = true;
+          statusMessage = 'Error: ${e.toString()}';
+        });
+        ErrorHandler.showError(context, 'Failed to calculate route: $e');
+      }
+    }
+  }
+
+  /// Selects a specific route from available options
+  void _selectRoute(RouteModel route) {
+      final RouteModel bestRoute = route;
+      
       final double distKm = bestRoute.distanceMeters / 1000;
       final int durationMins = bestRoute.durationMinutes;
 
@@ -794,32 +1062,50 @@ class _MapScreenState extends State<MapScreen> {
       final List<Marker> newDipMarkers = bestRoute.elevationDips.map<Marker>((dip) {
         return Marker(
           point: dip.point,
-          width: 60,
-          height: 60,
+          width: 40,
+          height: 40,
           child: Icon(
             Icons.water,
             color: dip.isHighRisk ? Colors.red : Colors.orange,
-            size: 35,
+            size: 24,
           ),
         );
       }).toList();
 
       if (mounted) {
         setState(() {
-          _startCoord = sCoord;
-          _destinationCoord = eCoord;
+          _currentRoute = bestRoute;
           routePoints = bestRoute.points;
           _weatherMarkers = newWeatherMarkers;
           _dipMarkers = newDipMarkers;
           _routeInstructions = instructions;
           _currentStepIndex = 0;
           _hasSpokenCurrentStep = false;
+          isLoading = false;
 
-          // Use blue or green for routes
-          if (bestRoute.riskLevel == 'High' || bestRoute.riskLevel == 'Medium') {
-            routeColor = Colors.blueAccent; // Blue even if risky
+          // Risk-based Coloring (Semi-transparent to show Traffic Layer underneath)
+          if (bestRoute.riskLevel == 'High') {
+            routeColor = Colors.red.withValues(alpha: 0.6);
+          } else if (bestRoute.riskLevel == 'Medium') {
+            routeColor = Colors.orange.withValues(alpha: 0.6);
           } else {
-            routeColor = Colors.green; // Safe route
+            routeColor = Colors.blue.withValues(alpha: 0.6); // Safe route (Blue)
+          }
+
+          // AUTOMATIC WEATHER ANIMATION TRIGGER
+          // User Request: "if it is raining it should automatically show its animation"
+          if (bestRoute.isRaining) {
+             // Check for severe weather keywords in alerts
+             final isStorm = bestRoute.weatherAlerts.any((alert) => 
+               alert.description.toLowerCase().contains('storm') || 
+               alert.description.toLowerCase().contains('thunder'));
+             
+             _activeWeatherMode = isStorm ? 'storm' : 'rain';
+          } else {
+             // If manual simulation implies 'clear' or user just reset, we sync to reality?
+             // Or should we only set to 'clear' if it was previously auto-set?
+             // Safest is to sync to reality:
+             _activeWeatherMode = 'clear';
           }
 
           routeStats = '${distKm.toStringAsFixed(1)} km • $durationMins min';
@@ -830,27 +1116,18 @@ class _MapScreenState extends State<MapScreen> {
           // Show warnings in weatherForecast instead
           if (bestRoute.riskLevel == 'High') {
             weatherForecast = 'CAUTION: ${bestRoute.isRaining ? "Rain" : "Hazards"} detected';
+            if (bestRoute.hydroplaningRisk) weatherForecast += ' | Hydroplaning risk';
+            if (bestRoute.hasUnpavedRoads && _selectedVehicle == VehicleType.truck) weatherForecast += ' | Soft ground';
+            if (bestRoute.elevationDips.isNotEmpty) weatherForecast += ' | ${bestRoute.elevationDips.length} dip(s)';
           } else if (bestRoute.riskLevel == 'Medium') {
             weatherForecast = 'Drive carefully';
           } else {
             weatherForecast = 'No major hazards';
           }
-
-          // Special warnings
-          if (bestRoute.hydroplaningRisk) {
-            weatherForecast += ' | Hydroplaning risk';
-          }
-          if (bestRoute.hasUnpavedRoads && _selectedVehicle == VehicleType.truck) {
-            weatherForecast += ' | Soft ground';
-          }
-          if (bestRoute.elevationDips.isNotEmpty) {
-            weatherForecast += ' | ${bestRoute.elevationDips.length} dip(s)';
-          }
-
-          isLoading = false;
         });
 
-        if (!isRefetch) {
+        // Only zoom to fit route if NOT actively navigating
+        if (!_isNavigating && bestRoute.points.isNotEmpty) {
           mapController.fitCamera(
             CameraFit.bounds(
               bounds: LatLngBounds.fromPoints(bestRoute.points),
@@ -862,18 +1139,6 @@ class _MapScreenState extends State<MapScreen> {
         // OFFLINE MODE: Save active route
         api.saveActiveRoute(bestRoute);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          statusMessage = 'Error: Connection Failed';
-          isLoading = false;
-          hasError = true;
-          routePoints = [];
-        });
-        ErrorHandler.showError(context, ErrorHandler.getUserFriendlyMessage(e));
-        ErrorHandler.logError('MapScreen', 'Route error: $e');
-      }
-    }
   }
 
   // ===============================================================
@@ -894,14 +1159,14 @@ class _MapScreenState extends State<MapScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         title: const Text(
           'Report Hazard',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           'What hazard did you encounter?',
-          style: TextStyle(color: Colors.black54),
+          style: TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
@@ -1140,59 +1405,18 @@ class _MapScreenState extends State<MapScreen> {
     const double largeButtonSize = 72.0;
     
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5), // Neutral grey background
+      backgroundColor: const Color(0xFF0F172A), // Premium Dark Background
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Text("RainSafe Navigation"),
-            const SizedBox(width: 10),
-            Text(
-              _selectedVehicle.icon,
-              style: const TextStyle(fontSize: 24),
-            ),
-            if (_rainModeEnabled) ...[
-              const SizedBox(width: 10),
-              const Icon(Icons.water_drop, color: Colors.blueAccent),
-            ],
-          ],
-        ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 2,
-        actions: [
-          // RAIN MODE TOGGLE
-          IconButton(
-            icon: Icon(
-              _rainModeEnabled ? Icons.wb_sunny : Icons.water_drop,
-              color: Colors.blue,
-            ),
-            onPressed: _toggleRainMode,
-            tooltip: 'Toggle Rain Mode',
-            iconSize: 24, // Standard size
-          ),
-          IconButton(
-            icon: const Icon(
-              Icons.directions_bike,
-              color: Colors.black87,
-            ),
-            onPressed: _showVehicleSelectionDialog,
-            tooltip: 'Change Vehicle',
-            iconSize: 24, // Standard size
-          ),
-          IconButton(
-            icon: const Icon(
-              Icons.language,
-              color: Colors.black87,
-            ),
-            onPressed: _showLanguageSelectionDialog,
-            tooltip: 'Voice Language',
-            iconSize: 24, // Standard size
-          ),
-        ],
-      ),
+      extendBodyBehindAppBar: true, 
+      // AppBar removed for Custom Floating Header
       body: Stack(
         children: [
+          // DEBUG STATE
+          Builder(builder: (context) {
+             print("🔘 DEBUG: BUILD STATE -> Nav: $_isNavigating, RoutePoints: ${routePoints.length}");
+             return const SizedBox.shrink();
+          }),
+
           // ✅ MIGRATED: flutter_map v8 MAP LAYER
           FlutterMap(
             mapController: mapController,
@@ -1202,6 +1426,11 @@ class _MapScreenState extends State<MapScreen> {
             ),
             children: [
               // ✅ MIGRATED: TileLayer with userAgentPackageName
+              // MAP TILE LAYER
+              // - Normal Mode: Clean OpenStreetMap
+              // - Navigation Mode OR Manual Traffic: Google Maps Traffic Layer
+              // - Normal Mode: Google Maps Standard (Matches Traffic Layer style)
+              // - Navigation Mode: Google Maps Traffic Layer
               TileLayer(
                 urlTemplate:
                     'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
@@ -1225,49 +1454,196 @@ class _MapScreenState extends State<MapScreen> {
                 ),
 
               PolylineLayer(
-                 polylines: [
-                if (routePoints.isNotEmpty) 
-                Polyline(
-                  points: routePoints,
-                  strokeWidth: _selectedVehicle == VehicleType.bike ? 8.0 : 5.0,
-                  color: routeColor, // Now only blue or green
-                  borderStrokeWidth: 2.0,
-                  borderColor: Colors.black26,
-                )
-              ]),
-              StreamBuilder<QuerySnapshot>(
-                stream: _hazardStream,
-                builder: (context, snapshot) {
-                  final List<Marker> liveHazards = [];
+                polylines: [
+                  // 1. ALTERNATIVE ROUTES (Grey/Ghost)
+                  ..._alternativeRoutes
+                      .where((r) => r != _currentRoute && r.points.isNotEmpty)
+                      .map((route) {
+                    
+                    Color riskColor;
+                    if (route.riskLevel == 'High') {
+                      riskColor = Colors.red.withValues(alpha: 0.7);
+                    } else if (route.riskLevel == 'Medium') {
+                      riskColor = Colors.orange.withValues(alpha: 0.7); // Yellow is hard to see, Orange is better
+                    } else {
+                      riskColor = Colors.green.withValues(alpha: 0.6);
+                    }
 
-                  if (snapshot.hasData) {
-                    liveHazards.addAll(snapshot.data!.docs.map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final locationData = data['location'] as Map<String, dynamic>;
-                      final status = data['status'] as String? ?? 'pending';
-                      final isVerified = status == 'verified';
+                     return Polyline(
+                      points: route.points,
+                      color: riskColor,
+                      strokeWidth: 5.0, // Slightly thicker to be visible
+                      borderColor: Colors.white.withValues(alpha: 0.8), // Add border for contrast
+                      borderStrokeWidth: 1.0, 
+                     );
+                   }),
+                   
+                   // 2. SELECTED ROUTE (Blue/Primary)
+                   if (routePoints.isNotEmpty)
+                     Polyline(
+                       points: routePoints,
+                       strokeWidth: 6.0,
+                       color: routeColor,
+                     ),
+                 ],
+               ),
+               StreamBuilder<QuerySnapshot>(
+                 stream: _hazardStream,
+                 builder: (context, snapshot) {
+                   final List<Marker> liveHazards = [];
 
-                      return Marker(
-                        point: LatLng(
-                          locationData['latitude'] as double,
-                          locationData['longitude'] as double,
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            // Dotted/Glow Effect for Unverified
-                            if (!isVerified)
-                              Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.orange.withValues(alpha: 0.5),
-                                    width: 2,
-                                    style: BorderStyle.solid, // Flutter default doesn't support dotted easily here
-                                  ),
+                   if (snapshot.hasError) {
+                     debugPrint("❌ FIRESTORE ERROR: ${snapshot.error}");
+                   }
+
+                   if (snapshot.connectionState == ConnectionState.active) {
+                      debugPrint("🔥 FIRESTORE: Stream active. Docs: ${snapshot.data?.docs.length ?? 0}");
+                   }
+
+                   if (snapshot.hasData) {
+                     liveHazards.addAll(snapshot.data!.docs.map((doc) {
+                       final data = doc.data() as Map<String, dynamic>;
+                       final locationData = data['location'] as Map<String, dynamic>;
+                       final status = data['status'] as String? ?? 'pending';
+                       final isVerified = status == 'verified';
+
+                       return Marker(
+                         point: LatLng(
+                           locationData['latitude'] as double,
+                           locationData['longitude'] as double,
+                         ),
+                         child: Stack(
+                           alignment: Alignment.center,
+                           children: [
+                             // Dotted/Glow Effect for Unverified
+                             if (!isVerified)
+                               Container(
+                                 decoration: BoxDecoration(
+                                   shape: BoxShape.circle,
+                                   border: Border.all(
+                                     color: Colors.orange.withValues(alpha: 0.5),
+                                     width: 2,
+                                     style: BorderStyle.solid, // Flutter default doesn't support dotted easily here
+                                   ),
+                                 ),
+                                 width: _rainModeEnabled ? 45 : 35,
+                                 height: _rainModeEnabled ? 45 : 35,
+                               ),
+                               
+                             // Icon
+                             Icon(
+                               // Outline for pending, Fill for verified
+                               isVerified ? Icons.warning : Icons.warning_amber_rounded,
+                               color: isVerified 
+                                   ? (_rainModeEnabled ? Colors.red : Colors.red) 
+                                   : (_rainModeEnabled ? Colors.orange : Colors.orange),
+                               size: _rainModeEnabled ? 40 : 30,
+                             ),
+                             
+                             // Question mark badge for pending
+                             if (!isVerified)
+                               const Positioned(
+                                 right: 0,
+                                 bottom: 0,
+                                 child: Icon(
+                                   Icons.question_mark,
+                                   size: 10,
+                                   color: Colors.black,
+                                 ),
+                               ),
+                           ],
+                         ),
+                       );
+                     }));
+                   }
+
+                   return MarkerLayer(
+                     markers: [
+                       // VISUAL: Live Location Puck/Arrow
+                       if (_snappedGPSPosition != null)
+                         Marker(
+                             point: _snappedGPSPosition!,
+                             width: 60, // Larger for visibility
+                             height: 60,
+                             child: Transform.rotate(
+                               angle: _isNavigating 
+                                   ? 0 
+                                   : (_currentHeading * (3.14159 / 180)), 
+                               child: VehicleMarker(
+                                 vehicleType: _selectedVehicle,
+                                 isNavigating: _isNavigating,
+                               ),
+                             ),),
+                       if (_destinationCoord != null)
+                         Marker(
+                             point: _destinationCoord!,
+                             child: Icon(
+                               Icons.location_on,
+                               color: Colors.red,
+                               size: _rainModeEnabled ? 50 : 40,
+                             )),
+                       ..._weatherMarkers,
+                       ..._dipMarkers,
+                       ...liveHazards,
+                     ],
+                   );
+                 },
+               ),
+             ],
+           ),
+
+           // Weather Overlay (Full Screen)
+           _buildWeatherEffect(),
+           
+           // CUSTOM FLOATING HEADER (Replaces AppBar)
+           Positioned(
+             top: 0, 
+             left: 0, 
+             right: 0,
+             child: SafeArea(
+               child: Container(
+                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                 decoration: BoxDecoration(
+                   color: const Color(0xFF1E293B).withValues(alpha: 0.85),
+                   borderRadius: BorderRadius.circular(24),
+                   border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                   boxShadow: [
+                     BoxShadow(
+                       color: Colors.black.withValues(alpha: 0.3),
+                       blurRadius: 20,
+                       offset: const Offset(0, 10),
+                     )
+                   ],
+                 ),
+                 child: Row(
+                   children: [
+                     // Back Button
+                     InkWell(
+                       onTap: () => Navigator.pop(context),
+                       child: const Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 20),
+                     ),
+                     const SizedBox(width: 16),
+                     
+                     // Title & Vehicle
+                     Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                             HapticFeedback.selectionClick();
+                             _showVehicleSelectionDialog();
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "Navigation",
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 10,
+                                  letterSpacing: 1,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                width: _rainModeEnabled ? 45 : 35,
-                                height: _rainModeEnabled ? 45 : 35,
                               ),
                               
                             // Icon
@@ -1297,86 +1673,76 @@ class _MapScreenState extends State<MapScreen> {
                                   ),
                                 ),
                               ),
-                          ],
+                            ],
+                          ),
                         ),
-                      );
-                    }));
-                  }
+                     ),
 
-                  return MarkerLayer(
-                    markers: [
-                      // POLYLINE SNAP: Use snapped position for visual display
-                      if (_snappedGPSPosition != null)
-                        Marker(
-                            point: _snappedGPSPosition!,
-                            child: Icon(
-                              Icons.my_location,
-                              color: _rainModeEnabled ? Colors.cyanAccent : Colors.blueAccent,
-                              size: _rainModeEnabled ? 40 : 30,
-                            )),
-                      if (_destinationCoord != null)
-                        Marker(
-                            point: _destinationCoord!,
-                            child: Icon(
-                              Icons.location_on,
-                              color: Colors.red,
-                              size: _rainModeEnabled ? 50 : 40,
-                            )),
-                      ..._weatherMarkers,
-                      ..._dipMarkers,
-                      ...liveHazards,
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
+                     // Actions
+                     Row(
+                       children: [
+                         _buildHeaderAction(
+                           icon: _voiceAssistantEnabled ? Icons.volume_up : Icons.volume_off,
+                           isActive: _voiceAssistantEnabled,
+                           onTap: _toggleVoice,
+                         ),
+                         const SizedBox(width: 8),
+                         _buildHeaderAction(
+                           icon: _rainModeEnabled ? Icons.water_drop : Icons.wb_sunny,
+                           isActive: _rainModeEnabled,
+                           onTap: _toggleRainMode,
+                         ),
+                       ],
+                     ),
+                   ],
+                 ),
+               ),
+             ),
+           ),
+           Positioned(
+             bottom: 100,
+             right: 16,
+             child: Column(
+               mainAxisSize: MainAxisSize.min,
+               crossAxisAlignment: CrossAxisAlignment.end,
+               children: [
 
 
-
-          // RIGHT-SIDE BUTTONS GROUP (Bottom-Right)
-          Positioned(
-            bottom: 100,
-            right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // SOS BUTTON
-                SizedBox(
-                  width: largeButtonSize,
-                  height: largeButtonSize,
-                  child: FloatingActionButton(
-                    heroTag: "sos_btn",
-                    backgroundColor: Colors.red,
-                    onPressed: _showSOSDialog,
-                    child: const Icon(
-                      Icons.sos,
-                      color: Colors.white,
-                      size: 30, // Standard size
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16), // Standard spacing
-                
-                // RECENTER BUTTON
-                SizedBox(
-                  width: buttonSize,
-                  height: buttonSize,
-                  child: FloatingActionButton(
-                    heroTag: "recenter_btn",
-                    backgroundColor: Colors.white,
-                    onPressed: _recenterMap,
-                    child: const Icon(
-                      Icons.gps_fixed,
-                      color: Colors.black87,
-                      size: 24, // Standard size
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // NAVIGATION START/STOP
+                 // SOS BUTTON
+                 SizedBox(
+                   width: largeButtonSize,
+                   height: largeButtonSize,
+                   child: FloatingActionButton(
+                     heroTag: "sos_btn",
+                     backgroundColor: Colors.red,
+                     onPressed: _showSOSDialog,
+                     child: const Icon(
+                       Icons.sos,
+                       color: Colors.white,
+                       size: 30, // Standard size
+                     ),
+                   ),
+                 ),
+                 const SizedBox(height: 16), // Standard spacing
+                 
+                 // RECENTER BUTTON
+                 SizedBox(
+                   width: buttonSize,
+                   height: buttonSize,
+                   child: FloatingActionButton(
+                     heroTag: "recenter_btn",
+                     backgroundColor: Colors.white,
+                     onPressed: _recenterMap,
+                     child: const Icon(
+                       Icons.gps_fixed,
+                       color: Colors.black87,
+                       size: 24, // Standard size
+                     ),
+                   ),
+                 ),
+                 const SizedBox(height: 16),
+                 
+                 // NAVIGATION START/STOP
                 if (_isNavigating)
                    SizedBox(
                     height: buttonSize,
@@ -1402,21 +1768,27 @@ class _MapScreenState extends State<MapScreen> {
                 else if (routePoints.isNotEmpty)
                   SizedBox(
                     height: buttonSize,
-                    child: FloatingActionButton.extended(
-                      heroTag: "start_nav_btn",
-                      onPressed: _startNavigation,
-                      backgroundColor: Colors.green,
-                      icon: const Icon(
-                        Icons.navigation,
-                        color: Colors.white,
-                        size: 18, // Standard size
-                      ),
-                      label: const Text(
-                        "Start",
-                        style: TextStyle(
+                    child: Listener(
+                      onPointerDown: (_) => print("🔘 POINTER DOWN on Start Button"),
+                      child: FloatingActionButton.extended(
+                        heroTag: "start_nav_btn",
+                        onPressed: () {
+                          print("🔘 BUTTON: Start Clicked via onPressed");
+                          _startNavigation();
+                        },
+                        backgroundColor: Colors.green,
+                        icon: const Icon(
+                          Icons.navigation,
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14, // Standard size
+                          size: 18, // Standard size
+                        ),
+                        label: const Text(
+                          "Start",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14, // Standard size
+                          ),
                         ),
                       ),
                     ),
@@ -1470,75 +1842,291 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // COMPACT STATUS CARD (White with blue border)
+          // ROUTE SELECTION (Alternatives)
+          if (_alternativeRoutes.length > 1 && !_isNavigating)
+            Positioned(
+              bottom: 180, // Above status card
+              left: 0,
+              right: 0,
+              child: SizedBox(
+                height: 50,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _alternativeRoutes.length,
+                  itemBuilder: (context, index) {
+                     final route = _alternativeRoutes[index];
+                     final isSelected = route == _currentRoute;
+                     // Colors for buttons: Blue, Green, Orange
+                     final Color color = index == 0 ? Colors.blue : (index == 1 ? Colors.green : Colors.orange);
+                     
+                     return Padding(
+                       padding: const EdgeInsets.only(right: 10),
+                       child: GestureDetector(
+                         onTap: () {
+                           HapticFeedback.selectionClick();
+                           setState(() {
+                             _selectRoute(route);
+                           });
+                         },
+                         child: Container(
+                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                           decoration: BoxDecoration(
+                             color: isSelected ? color : Colors.white,
+                             borderRadius: BorderRadius.circular(20), // Pill shape
+                             border: Border.all(color: color, width: 2),
+                             boxShadow: [
+                               if (isSelected) BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8)
+                             ]
+                           ),
+                           child: Row(
+                             children: [
+                               Text(
+                                 "${(route.durationMinutes)} min",
+                                 style: TextStyle(
+                                   color: isSelected ? Colors.white : Colors.black87,
+                                   fontWeight: FontWeight.bold,
+                                 ),
+                               ),
+                               if (route.riskLevel != "Safe") ...[
+                                 const SizedBox(width: 5),
+                                 Icon(Icons.warning, size: 16, color: isSelected ? Colors.white : Colors.red),
+                               ]
+                             ],
+                           ),
+                         ),
+                       ),
+                     );
+                  },
+                ),
+              ),
+            ),
+
+          // COMPACT STATUS CARD (Dark Glass)
           Positioned(
             bottom: 20,
             left: 20,
             right: 20,
-            child: Card(
-              color: Colors.white, // Always White
-              elevation: 4, // Standard elevation
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: Colors.grey.shade300,
-                  width: 1,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: routeColor == Colors.red 
+                          ? const Color(0xFFFF3B30).withValues(alpha: 0.5) 
+                          : const Color(0xFF00F0FF).withValues(alpha: 0.3)
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: routeColor.withValues(alpha: 0.2),
+                          border: Border.all(color: routeColor, width: 2),
+                        ),
+                        child: Icon(
+                          Icons.navigation,
+                          color: routeColor,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              statusMessage,
+                              style: const TextStyle(
+                                color: Colors.white, 
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                              maxLines: 1, 
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (routeStats.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  "$routeStats  •  $weatherForecast",
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 8.0, // Standard padding
-                ),
-                child: Row(
+            ),
+          ),
+
+
+          // Full Screen Loading Overlay
+          if (isLoading)
+            Container(
+              color: Colors.black.withValues(alpha: 0.5),
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (isLoading)
-                      const SizedBox(
-                        width: 12, // Standard size
-                        height: 12, // Standard size
-                        child: CircularProgressIndicator(
-                          color: Colors.blue,
-                          strokeWidth: 2, // Standard width
-                        ),
-                      )
-                    else
-                      Icon(
-                        Icons.check_circle, // Always show success icon
-                        color: routeColor,
-                        size: 12, // Standard size
-                      ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            statusMessage,
-                            style: const TextStyle(
-                              color: Colors.black87, // Always Black text
-                              fontWeight: FontWeight.bold,
-                              fontSize: 10, // Standard size
-                            ),
-                          ),
-                          if (routeStats.isNotEmpty)
-                            Text(
-                              "$routeStats  |  $weatherForecast",
-                              style: TextStyle(
-                                color: Colors.grey[600], // Always Grey text
-                                fontSize: 8, // Standard size
-                              ),
-                            ),
-                        ],
-                      ),
+                    CircularProgressIndicator(color: AppColors.primary),
+                    SizedBox(height: 16),
+                    Text(
+                      "Calculating Safe Route...",
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
+
+
+  Widget _buildWeatherEffect() {
+    // Determine mode: Explicit simulation OR Rain Mode
+    String mode = _activeWeatherMode;
+    bool showEffect = mode == 'rain' || mode == 'storm' || (_rainModeEnabled && mode != 'clear');
+    
+    // If rain mode is enabled via toggle, treat as rain unless storm selected
+    if (_rainModeEnabled && mode == 'clear') mode = 'rain';
+
+    if (!showEffect && mode == 'clear') return const SizedBox.shrink();
+
+    return IgnorePointer( // Allow touches to pass through to map
+      child: Stack(
+        children: [
+          // 1. Atmosphere Tint
+          Container(
+            color: mode == 'storm' 
+                ? Colors.black.withValues(alpha: 0.3) // Darker for storm
+                : Colors.blueGrey.withValues(alpha: 0.1), // Light blue for rain
+          ),
+          
+          // 2. Particle Animation
+          CustomPaint(
+            painter: _WeatherPainter(
+              animation: _weatherController,
+              mode: mode,
+            ),
+            size: Size.infinite,
+          ),
+          
+          // 3. Lightning Flash (Storm only)
+          if (mode == 'storm')
+            AnimatedBuilder(
+              animation: _weatherController,
+              builder: (context, child) {
+                 // Random flash every few seconds
+                 final val = _weatherController.value;
+                 final isFlash = (val > 0.95 && val < 0.97); // Short flash
+                 return Container(
+                    color: isFlash ? Colors.white.withValues(alpha: 0.3) : Colors.transparent,
+                 );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderAction({required IconData icon, required bool isActive, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: isActive ? Colors.black : Colors.white70,
+        ),
+      ),
+    );
+  }
+}
+
+// ===============================================================
+// WEATHER ANIMATION PAINTER
+// ===============================================================
+class _WeatherPainter extends CustomPainter {
+  final Animation<double> animation;
+  final String mode;
+  final Random _random = Random();
+  List<_RainDrop>? _drops;
+
+  _WeatherPainter({required this.animation, required this.mode}) : super(repaint: animation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Initialize drops if needed
+    if (_drops == null || _drops!.isEmpty) {
+      _drops = List.generate(mode == 'storm' ? 150 : 80, (index) {
+        return _RainDrop(
+          x: _random.nextDouble() * size.width,
+          y: _random.nextDouble() * size.height,
+          speed: _random.nextDouble() * 5 + 10,
+          length: _random.nextDouble() * 20 + 10,
+        );
+      });
+    }
+
+    final Paint paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+
+    for (var drop in _drops!) {
+      // Move drop
+      drop.y += drop.speed;
+      if (drop.y > size.height) {
+        drop.y = -drop.length; // Reset to top
+        drop.x = _random.nextDouble() * size.width; // New X
+      }
+
+      // Draw drop
+      // Add slight angle for wind
+      canvas.drawLine(
+        Offset(drop.x, drop.y),
+        Offset(drop.x - 5, drop.y + drop.length),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _RainDrop {
+  double x;
+  double y;
+  double speed;
+  double length;
+
+  _RainDrop({required this.x, required this.y, required this.speed, required this.length});
 }
