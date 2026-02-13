@@ -8,10 +8,46 @@ import '../models/route_model.dart';
 import '../utils/error_handler.dart';
 
 // ==========================================
+// SEARCH RESULT MODEL
+// ==========================================
+class SearchResult {
+  final String name;
+  final String address; // City, State, Country
+  final String fullText; // For searching/displaying
+  final LatLng? location; // coordinates for distance sorting
+
+  SearchResult({
+    required this.name,
+    required this.address,
+    this.location,
+  }) : fullText = "$name, $address";
+
+  @override
+  String toString() => fullText;
+  
+  // Calculate distance in meters from a reference point
+  double distanceTo(LatLng point) {
+    if (location == null) return double.infinity;
+    const Distance distance = Distance();
+    return distance.as(LengthUnit.Meter, location!, point);
+  }
+  
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchResult &&
+          runtimeType == other.runtimeType &&
+          fullText == other.fullText;
+
+  @override
+  int get hashCode => fullText.hashCode;
+}
+
+// ==========================================
 // GLOBAL CACHES (Prevent API Rate Limiting)
 // ==========================================
 final Map<String, LatLng> _coordinateCache = {};
-final Map<String, List<String>> _suggestionsCache = {};
+final Map<String, List<SearchResult>> _suggestionsCache = {}; // UPDATED CACHE TYPE
 final Map<String, dynamic> _weatherCache = {};
 final Map<String, List<double>> _elevationCache = {};
 
@@ -63,64 +99,191 @@ class ApiService {
     }
   }
 
-  /// Gets suggestions: First checks History, then API.
+  /// Retrieves search history from local storage.
+  Future<List<String>> getSearchHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList('search_history') ?? [];
+    } catch (e) {
+      ErrorHandler.logError(_tag, 'Failed to get history: $e');
+      return [];
+    }
+  }
+
+
+
+  Timer? _debounceTimer;
+
+  /// Gets suggestions: First checks History, then API (Debounced).
   /// 
   /// ENGLISH FALLBACK: All API responses are in English for accessibility.
-  Future<List<String>> getPlaceSuggestions(String query) async {
-    final List<String> results = [];
+  /// Gets suggestions: First checks History, then API (Debounced).
+  /// 
+  /// ENGLISH FALLBACK: All API responses are in English for accessibility.
+  /// PROXIMITY BIAS: Fetches current location to prioritize nearby results.
+  /// Gets suggestions: First checks History, then API (Debounced).
+  /// 
+  /// ENGLISH FALLBACK: All API responses are in English for accessibility.
+  /// PROXIMITY BIAS: Fetches current location to prioritize nearby results.
+  Future<List<SearchResult>> getPlaceSuggestions(String query) async {
+    final List<SearchResult> results = [];
 
     try {
       // 1. Get History Matches First
       final prefs = await SharedPreferences.getInstance();
       final history = prefs.getStringList('search_history') ?? [];
 
+      print("DEBUG: Searching for '$query'"); // DEBUG LOG
+
       if (query.isEmpty) {
-        return history; // Return full history if box is empty
+        // Convert history strings to SearchResult objects
+        return history.map((h) => SearchResult(name: h, address: 'Recent Search')).toList();
       }
 
       // Filter history based on typing
       final historyMatches = history
           .where((h) => h.toLowerCase().contains(query.toLowerCase()))
+          .map((h) => SearchResult(name: h, address: 'Recent Search'))
           .toList();
       results.addAll(historyMatches);
 
-      // 2. If query is long enough, fetch from API
+      // 2. API Fetch with Debounce
       if (query.length >= 3) {
         if (_suggestionsCache.containsKey(query)) {
           results.addAll(_suggestionsCache[query]!);
         } else {
-          final apiResults = await _fetchNominatimSuggestions(query);
+             // Get user location for proximity bias (Fast check)
+          LatLng? userLocation;
+          try {
+             final pos = await Geolocator.getLastKnownPosition();
+             if (pos != null) userLocation = LatLng(pos.latitude, pos.longitude);
+          } catch (_) {} // Ignore location errors for search
+
+          // Better approach: Just call Photon. It handles high throughput better.
+          List<SearchResult> apiResults = await _fetchPhotonSuggestions(query, userLocation);
+          
+          if (apiResults.isEmpty) {
+             print("DEBUG: Photon returned empty, trying Nominatim...");
+             apiResults = await _fetchNominatimSuggestions(query);
+          }
+          
+          // SORT BY DISTANCE (Client-side refinement)
+          if (userLocation != null) {
+              apiResults.sort((a, b) {
+                  final distA = a.distanceTo(userLocation!);
+                  final distB = b.distanceTo(userLocation!);
+                  return distA.compareTo(distB);
+              });
+          }
+          
           results.addAll(apiResults);
         }
       }
 
-      // Remove duplicates and return
+      print("DEBUG: Found ${results.length} results"); // DEBUG LOG
       return results.toSet().toList();
     } catch (e) {
+      print("DEBUG: Error - $e"); // DEBUG LOG
       ErrorHandler.logError(_tag, 'Failed to get suggestions: $e');
       return [];
     }
   }
 
+  /// Fetches place suggestions from Photon API (Faster/Better for Autocomplete).
+  /// Uses [location] to bias results towards the user.
+  Future<List<SearchResult>> _fetchPhotonSuggestions(String query, LatLng? location) async {
+     try {
+       // Photon API is excellent for autocomplete 'type-ahead'
+       String urlStr = 'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&limit=5';
+       
+       // ADD LOCATION BIAS
+       if (location != null) {
+         urlStr += '&lat=${location.latitude}&lon=${location.longitude}';
+       }
+
+       final url = Uri.parse(urlStr);
+       
+       final response = await http.get(url).timeout(const Duration(seconds: 15));
+
+       if (response.statusCode == 200) {
+         final data = json.decode(response.body) as Map<String, dynamic>;
+         final features = data['features'] as List<dynamic>;
+         
+         final List<SearchResult> results = features.map<SearchResult?>((f) {
+            final props = f['properties'] as Map<String, dynamic>;
+            final geometry = f['geometry'] as Map<String, dynamic>?;
+            
+            final name = props['name'] as String?;
+            
+            // Extract Coordinates
+            LatLng? coord;
+            if (geometry != null && geometry['coordinates'] != null) {
+                final coords = geometry['coordinates'] as List<dynamic>;
+                if (coords.length >= 2) {
+                   // GeoJSON is [lon, lat]
+                   coord = LatLng(coords[1].toDouble(), coords[0].toDouble());
+                }
+            }
+
+            // Construct address
+            final List<String> addressParts = [];
+            if (props['street'] != null) addressParts.add(props['street']);
+            if (props['city'] != null) addressParts.add(props['city']);
+            if (props['state'] != null) addressParts.add(props['state']);
+            if (props['country'] != null) addressParts.add(props['country']);
+            
+            final address = addressParts.join(', ');
+            
+            if (name == null) return null;
+            return SearchResult(name: name, address: address.isEmpty ? 'Unknown Location' : address, location: coord);
+         }).whereType<SearchResult>().toList();
+
+         _suggestionsCache[query] = results;
+         return results;
+       }
+     } catch (e) {
+        ErrorHandler.logError(_tag, 'Photon API error: $e');
+        // Fallback to Nominatim if Photon fails
+        return await _fetchNominatimSuggestions(query);
+     }
+     return [];
+  }
+
   /// Fetches place suggestions from Nominatim API.
   /// 
   /// ENGLISH FALLBACK: Uses English headers to ensure results are readable.
-  Future<List<String>> _fetchNominatimSuggestions(String query) async {
+  Future<List<SearchResult>> _fetchNominatimSuggestions(String query) async {
     try {
       final url = Uri.parse(
           'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=in');
-
+ 
       final response = await http.get(url, headers: _englishHeaders).timeout(
-            const Duration(seconds: 10),
+            const Duration(seconds: 20),
           );
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body) as List<dynamic>;
-        final List<String> results = data
-            .map<String>((dynamic item) =>
-                ((item as Map<String, dynamic>?)?['display_name'] as String?) ??
-                'Unknown')
-            .toList();
+        
+        final List<SearchResult> results = data.map<SearchResult?>((dynamic item) {
+             final map = item as Map<String, dynamic>?;
+             if (map == null) return null;
+             
+             final displayName = map['display_name'] as String?;
+             if (displayName == null) return null;
+             
+             // Extract Coordinates
+             LatLng? coord;
+             if (map['lat'] != null && map['lon'] != null) {
+                 coord = LatLng(double.parse(map['lat']), double.parse(map['lon']));
+             }
+
+             // Nominatim returns a comma-separated string.
+             final parts = displayName.split(',');
+             final name = parts.isNotEmpty ? parts.first.trim() : displayName;
+             final address = parts.length > 1 ? parts.sublist(1).join(',').trim() : '';
+             
+             return SearchResult(name: name, address: address, location: coord);
+        }).whereType<SearchResult>().toList();
 
         _suggestionsCache[query] = results;
         return results;
@@ -130,6 +293,7 @@ class ApiService {
     }
     return [];
   }
+
 
   // ==========================================
   // 2. GPS & LOCATION SERVICES (UPDATED FOR GEOLOCATOR V14)
@@ -189,6 +353,22 @@ class ApiService {
       ErrorHandler.logError(_tag, 'Position stream error: $e');
     });
   }
+  
+  /// Get full position stream including bearing/heading.
+  Stream<Position> getFullPositionStream({
+    LocationAccuracy accuracy = LocationAccuracy.bestForNavigation,
+    int distanceFilter = 10,
+  }) {
+    final settings = LocationSettings(
+      accuracy: accuracy,
+      distanceFilter: distanceFilter,
+    );
+
+    return Geolocator.getPositionStream(locationSettings: settings)
+        .handleError((e) {
+      ErrorHandler.logError(_tag, 'Position stream error: $e');
+    });
+  }
 
   // ==========================================
   // 3. GEOCODING (with Type Safety)
@@ -201,17 +381,33 @@ class ApiService {
     if (!_isValidLocationString(cityName)) return null;
 
     try {
-      // 1. Exact Search
+      if (_coordinateCache.containsKey(cityName)) {
+        return _coordinateCache[cityName];
+      }
+
+      // 1. Try Photon (Faster & Fuzzier)
+      try {
+        final photonResults = await _fetchPhotonSuggestions(cityName, null);
+        if (photonResults.isNotEmpty && photonResults.first.location != null) {
+          final loc = photonResults.first.location!;
+          _coordinateCache[cityName] = loc;
+          return loc;
+        }
+      } catch (e) {
+        ErrorHandler.logError(_tag, 'Photon getCoordinates error: $e');
+      }
+
+      // 2. Exact Search (Nominatim)
       LatLng? result = await _searchNominatim(cityName);
       if (result != null) return result;
 
-      // 2. Append Country
+      // 3. Append Country (Nominatim)
       if (!cityName.toLowerCase().contains('india')) {
         result = await _searchNominatim('$cityName, India');
         if (result != null) return result;
       }
 
-      // 3. Recursive Split (Safety net for bad formatting)
+      // 4. Recursive Split (Safety net for bad formatting)
       if (cityName.contains(',')) {
         final parts = cityName.split(',').map((p) => p.trim()).toList();
         for (int i = 0; i < parts.length - 1; i++) {
@@ -243,7 +439,7 @@ class ApiService {
           'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=1&accept-language=en&addressdetails=1');
 
       final response = await http.get(url, headers: _englishHeaders).timeout(
-            const Duration(seconds: 10),
+            const Duration(seconds: 20),
           );
 
       _lastNominatimCall = DateTime.now();
@@ -308,7 +504,7 @@ class ApiService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'locations': locations}),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
@@ -385,7 +581,7 @@ class ApiService {
           'https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current_weather=true&hourly=weathercode,temperature_2m,rain&timezone=auto');
 
       final response = await http.get(url, headers: _englishHeaders).timeout(
-            const Duration(seconds: 10),
+            const Duration(seconds: 20),
           );
 
       if (response.statusCode == 200) {
@@ -441,45 +637,189 @@ class ApiService {
         throw Exception('Ocean/Continental barrier detected. Road route unavailable.');
       }
 
-      // 2. Get multiple geometries from OSRM
-      final List<RouteModel> rawRoutes = await _getOsrmRoutesWithAlternatives(start, end);
+        // 2. Determine OSRM profile(s) based on vehicle
+      // MULTI-PROFILE STRATEGY: Fetch from multiple networks to guarantee alternatives
+      List<String> profilesToFetch = ['driving'];
+      
+      if (vehicleType == VehicleType.bike) {
+        profilesToFetch = ['cycling', 'driving', 'walking']; // Check all reasonable networks
+      } else if (vehicleType == VehicleType.car || vehicleType == VehicleType.truck) {
+        profilesToFetch = ['driving'];
+      }
 
-      if (rawRoutes.isEmpty) {
+      // 3. Fetch raw routes from all profiles IN PARALLEL
+      List<RouteModel> allRawRoutes = [];
+      
+      final futures = profilesToFetch.map((profile) async {
+        try {
+          return await _getOsrmRoutesWithAlternatives(
+            start, 
+            end,
+            profile: profile,
+          );
+        } catch (e) {
+          // Log error but return empty list so others can succeed
+          ErrorHandler.logError(_tag, 'Failed to fetch $profile routes: $e');
+          return <RouteModel>[];
+        }
+      });
+
+      final results = await Future.wait(futures);
+      
+      for (final routes in results) {
+        allRawRoutes.addAll(routes);
+      }
+
+      if (allRawRoutes.isEmpty) {
         throw Exception('No routes found from OSRM');
       }
 
-      // 3. Analyze each route
-      final List<RouteModel> analyzedRoutes = [];
-      
-      for (final route in rawRoutes) {
-        // Weather analysis
-        final RouteModel withWeather = await _analyzeRouteWeather(route, vehicleType);
+      // 4. Deduplicate Routes (Fuzzy Match)
+      // Remove routes that are effectively identical (similar duration & distance)
+      final List<RouteModel> uniqueRawRoutes = [];
+      for (final route in allRawRoutes) {
+         bool isDuplicate = false;
+         for (final existing in uniqueRawRoutes) {
+           final distDiff = (route.distanceMeters - existing.distanceMeters).abs();
+           final timeDiff = (route.durationSeconds - existing.durationSeconds).abs();
+           
+           // If distance within 5m AND time within 5s, consider it same route
+           if (distDiff < 5 && timeDiff < 5) {
+             isDuplicate = true;
+             break;
+           }
+
+           // GEOMETRIC DEDUPLICATION: Check if paths are visually identical
+           // If profiles (Bike vs Walk) return same path, duration differs but points are same.
+           // We must filter this to satisfy "different paths" requirement.
+           if (route.points.length == existing.points.length) {
+             const double threshold = 0.0001; // ~11 meters tolerance
+             bool isSamePath = true;
+             // Check start, middle, and end points for efficiency
+             final int mid = route.points.length ~/ 2;
+             final List<int> indices = [0, mid, route.points.length - 1];
+             
+             for (final i in indices) {
+               if (i < route.points.length) {
+                 final p1 = route.points[i];
+                 final p2 = existing.points[i];
+                 if ((p1.latitude - p2.latitude).abs() > threshold ||
+                     (p1.longitude - p2.longitude).abs() > threshold) {
+                   isSamePath = false;
+                   break;
+                 }
+               }
+             }
+             
+             if (isSamePath) {
+               isDuplicate = true;
+               break;
+             }
+           }
+         }
+         if (!isDuplicate) {
+           uniqueRawRoutes.add(route);
+         }
+      }
+
+      // 5. SEMICOLON FIX: Guaranteed Alternatives via Forced Diversion
+      // If OSRM returns only 1 route (common on simple grids), we FORCE a different path.
+      if (uniqueRawRoutes.length == 1) {
+        try {
+          final original = uniqueRawRoutes.first;
+          final midIndex = original.points.length ~/ 2;
+          final midPoint = original.points[midIndex];
+          
+          // SMART DIVERSION: Calculate Perpendicular Vector to Main Route
+          // 1. Vector from Start -> End
+          final double dx = end.longitude - start.longitude;
+          final double dy = end.latitude - start.latitude;
+          
+          // 2. Normalize
+          final double len = (dx * dx + dy * dy);
+          if (len > 0) {
+              // 3. Perpendicular Vector (-dy, dx)
+              // 3. Multi-Stage Probing (Standard & Wide)
+              // Offsets: ~500m Left, ~500m Right, ~1.2km Left, ~1.2km Right
+              // 3. Multi-Stage Probing (Standard & Wide)
+              // Offsets: ~500m Left, ~500m Right, ~1.2km Left, ~1.2km Right
+              final List<double> scales = [-0.005, 0.005, -0.012, 0.012];
+              
+              // PARALLEL EXECUTION: Fire all probes at once to save time
+              final futures = scales.map((scale) async {
+                  final probePoint = LatLng(
+                    midPoint.latitude - (dx * scale),
+                    midPoint.longitude + (dy * scale)
+                  );
+                  
+                  try {
+                    return await _getOsrmRoutesWithAlternatives(
+                      start, 
+                      end, 
+                      profile: vehicleType == VehicleType.bike ? 'cycling' : 'driving',
+                      viaPoint: probePoint
+                    );
+                  } catch (e) {
+                    return <RouteModel>[];
+                  }
+              });
+
+              final results = await Future.wait(futures);
+
+              // Check results in order
+              for (final divertedRoutes in results) {
+                 if (divertedRoutes.isNotEmpty) {
+                    final diverted = divertedRoutes.first;
+                    final distDiff = (original.distanceMeters - diverted.distanceMeters).abs();
+                    
+                    // CRITICAL: Ensure it's a DISTINCT but LOGICAL route
+                    if (distDiff > 300 && distDiff < 8000) {
+                       uniqueRawRoutes.add(diverted);
+                       break; // Found a good alternative, stop checking others
+                    }
+                 }
+              }
+          }
+        } catch (e) {
+           ErrorHandler.logError(_tag, 'Failed to generate forced alternative: $e');
+        }
+      }
+
+
+
+      // 6. Analyze each unique route
+      // 6. Analyze each unique route IN PARALLEL
+      final analysisFutures = uniqueRawRoutes.map((route) async {
+        // Weather & Elevation in parallel
+        final weatherFuture = _analyzeRouteWeather(route, vehicleType);
+        final elevationFuture = detectElevationDips(route.points);
         
-        // Elevation analysis (detect dips)
-        final dips = await detectElevationDips(route.points);
+        final results = await Future.wait([weatherFuture, elevationFuture]);
+        final withWeather = results[0] as RouteModel;
+        final dips = results[1] as List<ElevationDip>;
         
-        // Vehicle-specific checks
+        // Vehicle checks
         bool hydroplaning = false;
         if (vehicleType == VehicleType.truck || vehicleType == VehicleType.car) {
-          // Check for high-speed segments in rain
           if (withWeather.isRaining && route.distanceMeters > 5000) {
             hydroplaning = true;
           }
         }
 
-        // Combine all analysis
-        final analyzed = withWeather.copyWithWeather(
+        return withWeather.copyWithWeather(
           isRaining: withWeather.isRaining,
           riskLevel: _calculateVehicleRisk(withWeather, vehicleType, dips),
           weatherAlerts: withWeather.weatherAlerts,
           elevationDips: dips,
           hydroplaningRisk: hydroplaning,
         );
+      });
 
-        analyzedRoutes.add(analyzed);
-      }
+      final analyzedRoutes = await Future.wait(analysisFutures);
 
-      // 4. SORT: Prioritize Safety, then Speed
+
+
+      // 6. SORT: Prioritize Safety, then Speed
       analyzedRoutes.sort((a, b) {
         final aSafe = a.riskLevel == 'Safe';
         final bSafe = b.riskLevel == 'Safe';
@@ -538,15 +878,24 @@ class ApiService {
   /// POLYLINE SNAP FIX: Routes use exact OSRM geometry to prevent GPS offset.
   Future<List<RouteModel>> _getOsrmRoutesWithAlternatives(
     LatLng start,
-    LatLng end,
-  ) async {
+    LatLng end, {
+    String profile = 'driving', // Default
+    LatLng? viaPoint, // For forced deviation
+  }) async {
     try {
-      final url = Uri.parse('https://router.project-osrm.org/route/v1/driving/'
-          '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
+      // Use efficient OSRM profiles
+      String coordinates = '${start.longitude},${start.latitude};${end.longitude},${end.latitude}';
+      
+      if (viaPoint != null) {
+        coordinates = '${start.longitude},${start.latitude};${viaPoint.longitude},${viaPoint.latitude};${end.longitude},${end.latitude}';
+      }
+
+      final url = Uri.parse('https://router.project-osrm.org/route/v1/$profile/'
+          '$coordinates'
           '?overview=full&geometries=geojson&alternatives=true&steps=true');
 
       final response = await http.get(url, headers: _englishHeaders).timeout(
-            const Duration(seconds: 15),
+            const Duration(seconds: 30),
           );
 
       if (response.statusCode == 200) {
@@ -557,10 +906,12 @@ class ApiService {
           throw Exception('No routes found');
         }
 
-        return routes
+        final List<RouteModel> parsedRoutes = routes
             .map((route) =>
                 RouteModel.fromOsrmJson(route as Map<String, dynamic>))
             .toList();
+
+        return parsedRoutes;
       } else {
         throw Exception('OSRM returned status ${response.statusCode}');
       }
@@ -576,7 +927,7 @@ class ApiService {
     VehicleType vehicleType,
   ) async {
     try {
-      final checkPoints = _sampleRoutePoints(route.points, samples: 8);
+      final checkPoints = _sampleRoutePoints(route.points, samples: 4); // Fast sample
       var rainDetected = false;
       final List<WeatherAlert> weatherAlerts = [];
       final now = DateTime.now();
