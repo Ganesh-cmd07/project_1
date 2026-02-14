@@ -32,6 +32,23 @@ class AppColors {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+  
+  static const LinearGradient dangerGradient = LinearGradient(
+    colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  
+  static const LinearGradient warningGradient = LinearGradient(
+    colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Neon glow colors
+  static const Color neonCyan = Color(0xFF00F0FF);
+  static const Color neonPurple = Color(0xFF7C3AED);
+  static const Color neonRed = Color(0xFFFF3B30);
 }
 
 class AppTheme {

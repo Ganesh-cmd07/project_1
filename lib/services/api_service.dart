@@ -710,7 +710,20 @@ Future<List<RouteModel>> getSafeRoutesOptions(
       
       final results = await Future.wait([weatherFuture, elevationFuture]);
       final withWeather = results[0] as RouteModel;
-      final dips = results[1] as List<ElevationDip>;
+      var dips = results[1] as List<ElevationDip>;
+      
+      // LEVEL 2 ACCURACY: Inject real-time rain data into dips
+      if (withWeather.isRaining) {
+        // Find max rain intensity along the route
+        final double maxRain = withWeather.weatherAlerts
+            .map((a) => a.rainIntensity ?? 0.0)
+            .fold(0.0, (prev, curr) => prev > curr ? prev : curr);
+            
+        // Update all dips with this intensity
+        if (maxRain > 0) {
+          dips = dips.map((d) => d.copyWith(rainIntensity: maxRain)).toList();
+        }
+      }
       
       // Vehicle-specific checks
       bool hydroplaning = false;

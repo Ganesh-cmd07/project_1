@@ -578,6 +578,9 @@ class ElevationDip {
 
   /// Distance from route start in meters.
   final double distanceFromStart;
+  
+  /// Real-time rain intensity in mm/hr (Level 2 Accuracy).
+  final double rainIntensity;
 
   /// Creates an [ElevationDip].
   ElevationDip({
@@ -585,13 +588,21 @@ class ElevationDip {
     this.depthMeters = 0.0,
     required this.isHighRisk,
     this.distanceFromStart = 0.0,
+    this.rainIntensity = 0.0,
   });
+
+  /// Returns true if this dip is likely waterlogged based on REAL-TIME rain.
+  bool get isActiveWaterlogging {
+    // Logic: If dip exists (>5m) AND it is raining significantly (>2mm/hr)
+    return depthMeters >= 5.0 && rainIntensity > 2.0;
+  }
 
   Map<String, dynamic> toJson() => {
     'point': {'lat': point.latitude, 'lon': point.longitude},
     'depthMeters': depthMeters,
     'isHighRisk': isHighRisk,
     'distanceFromStart': distanceFromStart,
+    'rainIntensity': rainIntensity,
   };
 
   factory ElevationDip.fromJson(Map<String, dynamic> json) {
@@ -604,6 +615,18 @@ class ElevationDip {
       depthMeters: (json['depthMeters'] as num).toDouble(),
       isHighRisk: json['isHighRisk'] as bool,
       distanceFromStart: (json['distanceFromStart'] as num).toDouble(),
+      rainIntensity: (json['rainIntensity'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+  
+  /// Create a copy with updated rain data
+  ElevationDip copyWith({double? rainIntensity}) {
+    return ElevationDip(
+      point: point,
+      depthMeters: depthMeters,
+      isHighRisk: isHighRisk,
+      distanceFromStart: distanceFromStart,
+      rainIntensity: rainIntensity ?? this.rainIntensity,
     );
   }
 }

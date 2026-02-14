@@ -16,6 +16,9 @@ import '../models/route_model.dart';
 import '../utils/error_handler.dart';
 import 'package:url_launcher/url_launcher.dart'; // Added for calling functionality
 import '../widgets/vehicle_marker.dart'; // Added Vehicle Marker
+import '../widgets/language_selector.dart'; // Language Selector
+import '../widgets/premium_bottom_sheet.dart'; // Premium Bottom Sheet
+import '../widgets/weather_overlay.dart'; // Immersive Weather Animations
 
 import '../theme/app_theme.dart';
 
@@ -66,6 +69,12 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   // CONTROLLERS
   late final TextEditingController _startController;
   late final TextEditingController _endController;
+  final TextEditingController _mapSearchController = TextEditingController();
+
+  // MAP SEARCH STATE
+  List<SearchResult> _mapSearchResults = [];
+  bool _isMapSearching = false;
+  Timer? _mapSearchDebounce;
 
   // STATE VARIABLES
   // STATE VARIABLES
@@ -178,11 +187,13 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   void _initVoice() async {
     try {
       await flutterTts.setLanguage(_selectedLanguage);
-      await flutterTts.setSpeechRate(0.7); // Faster speech rate
+      await flutterTts.setSpeechRate(1.1); // Fast, clear speech
       await flutterTts.setVolume(1.0);
+      await flutterTts.setPitch(1.0);
     } catch (e) {
       // Fallback to English if selected language fails
       await flutterTts.setLanguage('en-IN');
+      await flutterTts.setSpeechRate(1.1);
       ErrorHandler.logError('MapScreen', 'TTS initialization error, falling back to English: $e');
     }
   }
@@ -284,9 +295,50 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     _stopLiveTracking();
     _startController.dispose();
     _endController.dispose();
+    _mapSearchController.dispose();
+    _mapSearchDebounce?.cancel();
     flutterTts.stop();
     _weatherController.dispose();
     super.dispose();
+  }
+
+  void _onMapSearchChanged(String query) {
+    _mapSearchDebounce?.cancel();
+    if (query.length < 2) {
+      setState(() {
+        _mapSearchResults = [];
+        _isMapSearching = false;
+      });
+      return;
+    }
+    _mapSearchDebounce = Timer(const Duration(milliseconds: 400), () async {
+      final results = await api.getPlaceSuggestions(query);
+      if (mounted) {
+        setState(() {
+          _mapSearchResults = results;
+          _isMapSearching = _mapSearchResults.isNotEmpty;
+        });
+      }
+    });
+  }
+
+  Future<void> _searchAndNavigate(String destination) async {
+    setState(() {
+      _mapSearchResults = [];
+      _isMapSearching = false;
+    });
+    _mapSearchController.clear();
+    FocusScope.of(context).unfocus();
+
+    // Update the end controller and recalculate
+    _endController.text = destination;
+    final coords = await api.getCoordinates(destination);
+    if (coords != null && mounted) {
+      setState(() {
+        _destinationCoord = coords;
+      });
+      _calculateSafeRoute();
+    }
   }
 
   // ===============================================================
@@ -799,11 +851,15 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     if (!_voiceAssistantEnabled) return; // Respect toggle
 
     try {
+      // Always sync language before speaking
+      await flutterTts.setLanguage(_selectedLanguage);
+      await flutterTts.setSpeechRate(1.1);
       await flutterTts.speak(text);
     } catch (e) {
       // ENGLISH FALLBACK: Try English if selected language fails
       try {
         await flutterTts.setLanguage('en-IN');
+        await flutterTts.setSpeechRate(1.1);
         await flutterTts.speak(text);
       } catch (fallbackError) {
         ErrorHandler.logError('MapScreen', 'TTS error even with English fallback: $fallbackError');
@@ -1058,16 +1114,31 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         );
       }).toList();
 
-      // Create dip markers
+      // Create dip markers (LEVEL 2 ACCURACY)
       final List<Marker> newDipMarkers = bestRoute.elevationDips.map<Marker>((dip) {
+        // Color logic: Blue = Active Water, Red = High Risk Dry, Orange = Med Risk Dry
+        final Color color;
+        final IconData icon;
+        
+        if (dip.isActiveWaterlogging) {
+          color = const Color(0xFF2962FF); // Deep Blue
+          icon = Icons.flood; // Active flooding
+        } else if (dip.isHighRisk) {
+          color = Colors.red;
+          icon = Icons.arrow_downward; // Changed to clear "Elevation Drop" arrow
+        } else {
+          color = Colors.orange;
+          icon = Icons.priority_high; 
+        }
+
         return Marker(
           point: dip.point,
           width: 40,
           height: 40,
           child: Icon(
-            Icons.water,
-            color: dip.isHighRisk ? Colors.red : Colors.orange,
-            size: 24,
+            icon,
+            color: color,
+            size: dip.isActiveWaterlogging ? 32 : 24, // Larger if active
           ),
         );
       }).toList();
@@ -1433,10 +1504,20 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               // - Navigation Mode: Google Maps Traffic Layer
               TileLayer(
                 urlTemplate:
-                    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                    _rainModeEnabled
+                      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
+                      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                 subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.rainsafe.navigator',
               ),
+
+              // RAIN RADAR OVERLAY
+              if (_rainModeEnabled || (_currentRoute?.isRaining ?? false))
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',
+                  userAgentPackageName: 'com.rainsafe.navigator',
+                ),
               
               // RAIN MODE OVERLAY (Border only)
               if (_rainModeEnabled)
@@ -1589,6 +1670,29 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                    );
                  },
                ),
+               // WATERLOGGING HEATMAP ZONES
+               if (_currentRoute != null && _currentRoute!.elevationDips.isNotEmpty)
+                 CircleLayer(
+                   circles: _currentRoute!.elevationDips.map((dip) {
+                     // Dynamic Color for Heatmap
+                     final Color fillColor = dip.isActiveWaterlogging 
+                         ? Colors.blue.withValues(alpha: 0.4) 
+                         : Colors.orange.withValues(alpha: 0.15);
+                     
+                     final Color borderColor = dip.isActiveWaterlogging
+                         ? Colors.blueAccent
+                         : (dip.isHighRisk ? Colors.red : Colors.orange);
+
+                     return CircleMarker(
+                       point: dip.point,
+                       radius: dip.isActiveWaterlogging ? 50 : 40, // Larger if active
+                       color: fillColor,
+                       borderColor: borderColor.withValues(alpha: 0.8),
+                       borderStrokeWidth: dip.isActiveWaterlogging ? 3 : 2,
+                       useRadiusInMeter: true,
+                     );
+                   }).toList(),
+                 ),
              ],
            ),
 
@@ -1645,33 +1749,26 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              
-                            // Icon
-                            Icon(
-                              // Outline for pending, Fill for verified
-                              isVerified ? Icons.warning : Icons.warning_amber_rounded,
-                              color: isVerified 
-                                  ? (_rainModeEnabled ? Colors.red : Colors.red) 
-                                  : (_rainModeEnabled ? Colors.orange : Colors.orange),
-                              size: _rainModeEnabled ? 40 : 30,
-                            ),
-                            
-                            // Question mark badge for pending
-                            if (!isVerified)
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Text(
+                                    _selectedVehicle.displayName,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
                                   ),
-                                  child: const Icon(
-                                    Icons.question_mark,
-                                    size: 10,
-                                    color: Colors.black,
+                                  const SizedBox(width: 8),
+                                  Text(_selectedVehicle.icon, style: const TextStyle(fontSize: 14)),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.keyboard_arrow_down,
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    size: 16,
                                   ),
-                                ),
+                                ],
                               ),
                             ],
                           ),
@@ -1681,26 +1778,171 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                      // Actions
                      Row(
                        children: [
-                         _buildHeaderAction(
-                           icon: _voiceAssistantEnabled ? Icons.volume_up : Icons.volume_off,
-                           isActive: _voiceAssistantEnabled,
-                           onTap: _toggleVoice,
+                         // Voice Mic Button (Glowing when active)  
+                         GestureDetector(
+                           onTap: () {
+                             HapticFeedback.selectionClick();
+                             _toggleVoice();
+                           },
+                           child: AnimatedBuilder(
+                             animation: _weatherController,
+                             builder: (context, child) {
+                               final glow = _voiceAssistantEnabled
+                                   ? (sin(_weatherController.value * 2 * pi) + 1) / 2
+                                   : 0.0;
+                               return Container(
+                                 padding: const EdgeInsets.all(8),
+                                 decoration: BoxDecoration(
+                                   color: _voiceAssistantEnabled
+                                       ? const Color(0xFF00F0FF).withValues(alpha: 0.2 + glow * 0.1)
+                                       : Colors.white.withValues(alpha: 0.1),
+                                   shape: BoxShape.circle,
+                                   boxShadow: _voiceAssistantEnabled
+                                       ? [
+                                           BoxShadow(
+                                             color: const Color(0xFF00F0FF).withValues(alpha: 0.3 + glow * 0.3),
+                                             blurRadius: 8 + glow * 8,
+                                             spreadRadius: glow * 2,
+                                           ),
+                                         ]
+                                       : [],
+                                 ),
+                                 child: Icon(
+                                   _voiceAssistantEnabled ? Icons.mic : Icons.mic_off,
+                                   size: 18,
+                                   color: _voiceAssistantEnabled ? const Color(0xFF00F0FF) : Colors.white70,
+                                 ),
+                               );
+                             },
+                           ),
                          ),
                          const SizedBox(width: 8),
-                         _buildHeaderAction(
-                           icon: _rainModeEnabled ? Icons.water_drop : Icons.wb_sunny,
-                           isActive: _rainModeEnabled,
-                           onTap: _toggleRainMode,
-                         ),
-                       ],
+                          _buildHeaderAction(
+                            icon: _rainModeEnabled ? Icons.water_drop : Icons.wb_sunny,
+                            isActive: _rainModeEnabled,
+                            onTap: _toggleRainMode,
+                          ),
+                          const SizedBox(width: 8),
+                          _buildHeaderAction(
+                            icon: Icons.translate,
+                            isActive: false,
+                            onTap: _showLanguageSelector,
+                          ),
+                        ],
                      ),
                    ],
                  ),
                ),
              ),
            ),
+           // FLOATING SEARCH BAR (below header)
            Positioned(
-             bottom: 100,
+             top: MediaQuery.of(context).padding.top + 72,
+             left: 16,
+             right: 16,
+             child: Column(
+               children: [
+                 Container(
+                   height: 48,
+                   decoration: BoxDecoration(
+                     color: const Color(0xFF1E293B).withValues(alpha: 0.9),
+                     borderRadius: BorderRadius.circular(16),
+                     border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                     boxShadow: [
+                       BoxShadow(
+                         color: Colors.black.withValues(alpha: 0.2),
+                         blurRadius: 12,
+                         offset: const Offset(0, 4),
+                       ),
+                     ],
+                   ),
+                   child: Row(
+                     children: [
+                       const SizedBox(width: 14),
+                       const Icon(Icons.search, color: Colors.white38, size: 20),
+                       const SizedBox(width: 10),
+                       Expanded(
+                         child: TextField(
+                           controller: _mapSearchController,
+                           style: const TextStyle(color: Colors.white, fontSize: 14),
+                           decoration: InputDecoration(
+                             hintText: _endController.text.isNotEmpty
+                                 ? _endController.text
+                                 : "Search destination...",
+                             hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                             border: InputBorder.none,
+                           ),
+                           onChanged: _onMapSearchChanged,
+                           onSubmitted: (val) {
+                             if (val.trim().isNotEmpty) {
+                               _searchAndNavigate(val.trim());
+                             }
+                           },
+                         ),
+                       ),
+                       if (_mapSearchController.text.isNotEmpty)
+                         GestureDetector(
+                           onTap: () {
+                             _mapSearchController.clear();
+                             setState(() {
+                               _mapSearchResults = [];
+                               _isMapSearching = false;
+                             });
+                           },
+                           child: const Padding(
+                             padding: EdgeInsets.all(8),
+                             child: Icon(Icons.close, color: Colors.white38, size: 18),
+                           ),
+                         ),
+                       const SizedBox(width: 8),
+                     ],
+                   ),
+                 ),
+                 // Search Results Dropdown
+                 if (_isMapSearching && _mapSearchResults.isNotEmpty)
+                   Container(
+                     margin: const EdgeInsets.only(top: 4),
+                     constraints: const BoxConstraints(maxHeight: 200),
+                     decoration: BoxDecoration(
+                       color: const Color(0xFF1E293B).withValues(alpha: 0.95),
+                       borderRadius: BorderRadius.circular(12),
+                       border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                       boxShadow: [
+                         BoxShadow(
+                           color: Colors.black.withValues(alpha: 0.3),
+                           blurRadius: 15,
+                         ),
+                       ],
+                     ),
+                     child: ListView.separated(
+                       shrinkWrap: true,
+                       padding: EdgeInsets.zero,
+                       itemCount: _mapSearchResults.length,
+                       separatorBuilder: (_, __) => Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                       itemBuilder: (ctx, i) {
+                         return ListTile(
+                           dense: true,
+                           leading: const Icon(Icons.location_on, color: Color(0xFF00F0FF), size: 18),
+                           title: Text(
+                             _mapSearchResults[i].name,
+                             style: const TextStyle(color: Colors.white, fontSize: 13),
+                             maxLines: 1,
+                             overflow: TextOverflow.ellipsis,
+                           ),
+                           subtitle: Text(
+                             _mapSearchResults[i].address,
+                             style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
+                           ),
+                           onTap: () => _searchAndNavigate(_mapSearchResults[i].fullText),
+                         );
+                       },
+                     ),
+                   ),
+               ],
+             ),
+           ),
+           Positioned(
+             bottom: (_alternativeRoutes.length > 1 && !_isNavigating) ? 330 : 250,
              right: 16,
              child: Column(
                mainAxisSize: MainAxisSize.min,
@@ -1708,19 +1950,51 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                children: [
 
 
-                 // SOS BUTTON
+                 // SOS BUTTON (Pulsing Glow)
                  SizedBox(
                    width: largeButtonSize,
                    height: largeButtonSize,
-                   child: FloatingActionButton(
-                     heroTag: "sos_btn",
-                     backgroundColor: Colors.red,
-                     onPressed: _showSOSDialog,
-                     child: const Icon(
-                       Icons.sos,
-                       color: Colors.white,
-                       size: 30, // Standard size
-                     ),
+                   child: Stack(
+                     alignment: Alignment.center,
+                     children: [
+                       // Outer pulse glow
+                       AnimatedBuilder(
+                         animation: _weatherController,
+                         builder: (context, child) {
+                           final pulse = (sin(_weatherController.value * 2 * pi) + 1) / 2;
+                           return Container(
+                             width: largeButtonSize + 8 + (pulse * 6),
+                             height: largeButtonSize + 8 + (pulse * 6),
+                             decoration: BoxDecoration(
+                               shape: BoxShape.circle,
+                               boxShadow: [
+                                 BoxShadow(
+                                   color: Colors.red.withValues(alpha: 0.3 + pulse * 0.2),
+                                   blurRadius: 15 + pulse * 10,
+                                   spreadRadius: pulse * 4,
+                                 ),
+                               ],
+                             ),
+                           );
+                         },
+                       ),
+                       // Actual button
+                       SizedBox(
+                         width: largeButtonSize,
+                         height: largeButtonSize,
+                         child: FloatingActionButton(
+                           heroTag: "sos_btn",
+                           backgroundColor: const Color(0xFFEF4444),
+                           elevation: 12,
+                           onPressed: _showSOSDialog,
+                           child: const Icon(
+                             Icons.sos,
+                             color: Colors.white,
+                             size: 28,
+                           ),
+                         ),
+                       ),
+                     ],
                    ),
                  ),
                  const SizedBox(height: 16), // Standard spacing
@@ -1824,7 +2098,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
           // REPORT HAZARD BUTTON (Rain mode adaptive)
           Positioned(
-            bottom: 85,
+            bottom: (_alternativeRoutes.length > 1 && !_isNavigating) ? 330 : 250,
             left: 20,
             child: SizedBox(
               width: largeButtonSize,
@@ -1842,14 +2116,14 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
             ),
           ),
 
-          // ROUTE SELECTION (Alternatives)
+          // ROUTE SELECTION (Premium Cards)
           if (_alternativeRoutes.length > 1 && !_isNavigating)
             Positioned(
-              bottom: 180, // Above status card
+              bottom: 240, // ABOVE Bottom Sheet
               left: 0,
               right: 0,
               child: SizedBox(
-                height: 50,
+                height: 80,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1857,42 +2131,96 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                   itemBuilder: (context, index) {
                      final route = _alternativeRoutes[index];
                      final isSelected = route == _currentRoute;
-                     // Colors for buttons: Blue, Green, Orange
-                     final Color color = index == 0 ? Colors.blue : (index == 1 ? Colors.green : Colors.orange);
+                     final Color chipColor;
+                     if (route.riskLevel == 'High') {
+                       chipColor = const Color(0xFFEF4444);
+                     } else if (route.riskLevel == 'Medium') {
+                       chipColor = const Color(0xFFF59E0B);
+                     } else {
+                       chipColor = const Color(0xFF10B981);
+                     }
                      
                      return Padding(
                        padding: const EdgeInsets.only(right: 10),
                        child: GestureDetector(
                          onTap: () {
                            HapticFeedback.selectionClick();
-                           setState(() {
-                             _selectRoute(route);
-                           });
+                           setState(() => _selectRoute(route));
                          },
-                         child: Container(
-                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                           decoration: BoxDecoration(
-                             color: isSelected ? color : Colors.white,
-                             borderRadius: BorderRadius.circular(20), // Pill shape
-                             border: Border.all(color: color, width: 2),
-                             boxShadow: [
-                               if (isSelected) BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8)
-                             ]
-                           ),
-                           child: Row(
-                             children: [
-                               Text(
-                                 "${(route.durationMinutes)} min",
-                                 style: TextStyle(
-                                   color: isSelected ? Colors.white : Colors.black87,
-                                   fontWeight: FontWeight.bold,
+                         child: ClipRRect(
+                           borderRadius: BorderRadius.circular(16),
+                           child: BackdropFilter(
+                             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                             child: Container(
+                               width: 140,
+                               padding: const EdgeInsets.all(12),
+                               decoration: BoxDecoration(
+                                 color: isSelected
+                                     ? chipColor.withValues(alpha: 0.2)
+                                     : const Color(0xFF1E293B).withValues(alpha: 0.8),
+                                 borderRadius: BorderRadius.circular(16),
+                                 border: Border.all(
+                                   color: isSelected ? chipColor : Colors.white.withValues(alpha: 0.1),
+                                   width: isSelected ? 1.5 : 1,
                                  ),
+                                 boxShadow: [
+                                   if (isSelected)
+                                     BoxShadow(color: chipColor.withValues(alpha: 0.3), blurRadius: 12),
+                                 ],
                                ),
-                               if (route.riskLevel != "Safe") ...[
-                                 const SizedBox(width: 5),
-                                 Icon(Icons.warning, size: 16, color: isSelected ? Colors.white : Colors.red),
-                               ]
-                             ],
+                               child: Column(
+                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                 children: [
+                                   Row(
+                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                     children: [
+                                       Text(
+                                         "Route ${index + 1}",
+                                         style: TextStyle(
+                                           color: Colors.white.withValues(alpha: 0.5),
+                                           fontSize: 10,
+                                           fontWeight: FontWeight.bold,
+                                           letterSpacing: 0.5,
+                                         ),
+                                       ),
+                                       Container(
+                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                         decoration: BoxDecoration(
+                                           color: chipColor.withValues(alpha: 0.2),
+                                           borderRadius: BorderRadius.circular(6),
+                                         ),
+                                         child: Text(
+                                           route.riskLevel.toUpperCase(),
+                                           style: TextStyle(color: chipColor, fontSize: 8, fontWeight: FontWeight.bold),
+                                         ),
+                                       ),
+                                     ],
+                                   ),
+                                   Row(
+                                     children: [
+                                       Icon(Icons.schedule, size: 12, color: Colors.white.withValues(alpha: 0.6)),
+                                       const SizedBox(width: 4),
+                                       Flexible(
+                                         child: Text(
+                                           "${route.durationMinutes} min",
+                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                           overflow: TextOverflow.ellipsis,
+                                         ),
+                                       ),
+                                       const SizedBox(width: 6),
+                                       Flexible(
+                                         child: Text(
+                                           "${(route.distanceMeters / 1000).toStringAsFixed(1)} km",
+                                           style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
+                                           overflow: TextOverflow.ellipsis,
+                                         ),
+                                       ),
+                                     ],
+                                   ),
+                                 ],
+                               ),
+                             ),
                            ),
                          ),
                        ),
@@ -1902,76 +2230,18 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               ),
             ),
 
-          // COMPACT STATUS CARD (Dark Glass)
+          // PREMIUM BOTTOM SHEET
           Positioned(
-            bottom: 20,
-            left: 20,
-            right: 20,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: routeColor == Colors.red 
-                          ? const Color(0xFFFF3B30).withValues(alpha: 0.5) 
-                          : const Color(0xFF00F0FF).withValues(alpha: 0.3)
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: routeColor.withValues(alpha: 0.2),
-                          border: Border.all(color: routeColor, width: 2),
-                        ),
-                        child: Icon(
-                          Icons.navigation,
-                          color: routeColor,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              statusMessage,
-                              style: const TextStyle(
-                                color: Colors.white, 
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                              maxLines: 1, 
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (routeStats.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Text(
-                                  "$routeStats  •  $weatherForecast",
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.6),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            bottom: 16,
+            left: 16,
+            right: 16,
+            child: PremiumBottomSheet(
+              route: _currentRoute,
+              statusMessage: statusMessage,
+              weatherForecast: weatherForecast,
+              routeColor: routeColor,
+              isNavigating: _isNavigating,
+              isRaining: _currentRoute?.isRaining ?? false,
             ),
           ),
 
@@ -2003,48 +2273,35 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   Widget _buildWeatherEffect() {
     // Determine mode: Explicit simulation OR Rain Mode
     String mode = _activeWeatherMode;
-    bool showEffect = mode == 'rain' || mode == 'storm' || (_rainModeEnabled && mode != 'clear');
+    bool showEffect = mode == 'rain' || mode == 'storm' || mode == 'cloudy' || (_rainModeEnabled && mode != 'clear');
     
     // If rain mode is enabled via toggle, treat as rain unless storm selected
     if (_rainModeEnabled && mode == 'clear') mode = 'rain';
 
     if (!showEffect && mode == 'clear') return const SizedBox.shrink();
 
-    return IgnorePointer( // Allow touches to pass through to map
-      child: Stack(
-        children: [
-          // 1. Atmosphere Tint
-          Container(
-            color: mode == 'storm' 
-                ? Colors.black.withValues(alpha: 0.3) // Darker for storm
-                : Colors.blueGrey.withValues(alpha: 0.1), // Light blue for rain
-          ),
-          
-          // 2. Particle Animation
-          CustomPaint(
-            painter: _WeatherPainter(
-              animation: _weatherController,
-              mode: mode,
-            ),
-            size: Size.infinite,
-          ),
-          
-          // 3. Lightning Flash (Storm only)
-          if (mode == 'storm')
-            AnimatedBuilder(
-              animation: _weatherController,
-              builder: (context, child) {
-                 // Random flash every few seconds
-                 final val = _weatherController.value;
-                 final isFlash = (val > 0.95 && val < 0.97); // Short flash
-                 return Container(
-                    color: isFlash ? Colors.white.withValues(alpha: 0.3) : Colors.transparent,
-                 );
-              },
-            ),
-        ],
-      ),
+    // Use the new immersive overlay
+    return WeatherOverlay(
+      weatherMode: mode,
+      isNight: DateTime.now().hour > 18 || DateTime.now().hour < 6,
     );
+  }
+
+  void _showLanguageSelector() async {
+    final selected = await LanguageSelector.show(
+      context,
+      currentLanguage: _selectedLanguage,
+      languageNames: _languageNames,
+    );
+    if (selected != null && selected != _selectedLanguage) {
+      setState(() => _selectedLanguage = selected);
+      // Update TTS language and re-apply speed
+      await flutterTts.setLanguage(selected);
+      await flutterTts.setSpeechRate(1.1);
+      // Confirm with a voice sample
+      final langName = _languageNames[selected] ?? selected;
+      _speak('Language changed to $langName');
+    }
   }
 
   Widget _buildHeaderAction({required IconData icon, required bool isActive, required VoidCallback onTap}) {
@@ -2056,77 +2313,31 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.1),
+          color: isActive
+              ? const Color(0xFF00F0FF).withValues(alpha: 0.2)
+              : Colors.white.withValues(alpha: 0.1),
           shape: BoxShape.circle,
+          border: isActive
+              ? Border.all(color: const Color(0xFF00F0FF).withValues(alpha: 0.4))
+              : null,
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF00F0FF).withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : [],
         ),
         child: Icon(
           icon,
           size: 18,
-          color: isActive ? Colors.black : Colors.white70,
+          color: isActive ? const Color(0xFF00F0FF) : Colors.white70,
         ),
       ),
     );
   }
 }
 
-// ===============================================================
-// WEATHER ANIMATION PAINTER
-// ===============================================================
-class _WeatherPainter extends CustomPainter {
-  final Animation<double> animation;
-  final String mode;
-  final Random _random = Random();
-  List<_RainDrop>? _drops;
 
-  _WeatherPainter({required this.animation, required this.mode}) : super(repaint: animation);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Initialize drops if needed
-    if (_drops == null || _drops!.isEmpty) {
-      _drops = List.generate(mode == 'storm' ? 150 : 80, (index) {
-        return _RainDrop(
-          x: _random.nextDouble() * size.width,
-          y: _random.nextDouble() * size.height,
-          speed: _random.nextDouble() * 5 + 10,
-          length: _random.nextDouble() * 20 + 10,
-        );
-      });
-    }
-
-    final Paint paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round;
-
-    for (var drop in _drops!) {
-      // Move drop
-      drop.y += drop.speed;
-      if (drop.y > size.height) {
-        drop.y = -drop.length; // Reset to top
-        drop.x = _random.nextDouble() * size.width; // New X
-      }
-
-      // Draw drop
-      // Add slight angle for wind
-      canvas.drawLine(
-        Offset(drop.x, drop.y),
-        Offset(drop.x - 5, drop.y + drop.length),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
-class _RainDrop {
-  double x;
-  double y;
-  double speed;
-  double length;
-
-  _RainDrop({required this.x, required this.y, required this.speed, required this.length});
-}
