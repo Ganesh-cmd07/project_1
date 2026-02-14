@@ -534,7 +534,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           shadowColor: const Color(0xFF00F0FF).withValues(alpha: 0.4),
         ),
         onPressed: () {
-          // Navigate to MapScreen
           Navigator.push(
             context,
             PageRouteBuilder(
@@ -551,7 +550,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         child: Ink(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF00C6FF), Color(0xFF0072FF)], // Cyan to Blue
+              colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
@@ -562,8 +561,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                Icon(Icons.search, color: Colors.white, size: 22),
+                SizedBox(width: 10),
                 Text(
-                  "START NEW JOURNEY",
+                  "SEARCH DESTINATION",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -571,8 +572,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     letterSpacing: 1.5,
                   ),
                 ),
-                SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded, color: Colors.white),
               ],
             ),
           ),
