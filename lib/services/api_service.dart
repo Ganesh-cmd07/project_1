@@ -622,218 +622,253 @@ class ApiService {
   // 6. VEHICLE-SPECIFIC ROUTE LOGIC
   // ==========================================
 
-  /// Get multiple routes with vehicle-specific analysis.
-  Future<List<RouteModel>> getSafeRoutesOptions(
-    LatLng start,
-    LatLng end, {
-    VehicleType vehicleType = VehicleType.bike,
-  }) async {
-    try {
-      // 1. Check for ocean barriers
-      const Distance distanceCalc = Distance();
-      final airDistance = distanceCalc.as(LengthUnit.Kilometer, start, end);
+Future<List<RouteModel>> getSafeRoutesOptions(
+  LatLng start,
+  LatLng end, {
+  VehicleType vehicleType = VehicleType.bike,
+}) async {
+  try {
+    // 1. Ocean barrier check
+    const Distance distanceCalc = Distance();
+    final airDistance = distanceCalc.as(LengthUnit.Kilometer, start, end);
 
-      if (airDistance > 2000) {
-        throw Exception('Ocean/Continental barrier detected. Road route unavailable.');
-      }
-
-        // 2. Determine OSRM profile(s) based on vehicle
-      // MULTI-PROFILE STRATEGY: Fetch from multiple networks to guarantee alternatives
-      List<String> profilesToFetch = ['driving'];
-      
-      if (vehicleType == VehicleType.bike) {
-        profilesToFetch = ['cycling', 'driving', 'walking']; // Check all reasonable networks
-      } else if (vehicleType == VehicleType.car || vehicleType == VehicleType.truck) {
-        profilesToFetch = ['driving'];
-      }
-
-      // 3. Fetch raw routes from all profiles IN PARALLEL
-      List<RouteModel> allRawRoutes = [];
-      
-      final futures = profilesToFetch.map((profile) async {
-        try {
-          return await _getOsrmRoutesWithAlternatives(
-            start, 
-            end,
-            profile: profile,
-          );
-        } catch (e) {
-          // Log error but return empty list so others can succeed
-          ErrorHandler.logError(_tag, 'Failed to fetch $profile routes: $e');
-          return <RouteModel>[];
-        }
-      });
-
-      final results = await Future.wait(futures);
-      
-      for (final routes in results) {
-        allRawRoutes.addAll(routes);
-      }
-
-      if (allRawRoutes.isEmpty) {
-        throw Exception('No routes found from OSRM');
-      }
-
-      // 4. Deduplicate Routes (Fuzzy Match)
-      // Remove routes that are effectively identical (similar duration & distance)
-      final List<RouteModel> uniqueRawRoutes = [];
-      for (final route in allRawRoutes) {
-         bool isDuplicate = false;
-         for (final existing in uniqueRawRoutes) {
-           final distDiff = (route.distanceMeters - existing.distanceMeters).abs();
-           final timeDiff = (route.durationSeconds - existing.durationSeconds).abs();
-           
-           // If distance within 5m AND time within 5s, consider it same route
-           if (distDiff < 5 && timeDiff < 5) {
-             isDuplicate = true;
-             break;
-           }
-
-           // GEOMETRIC DEDUPLICATION: Check if paths are visually identical
-           // If profiles (Bike vs Walk) return same path, duration differs but points are same.
-           // We must filter this to satisfy "different paths" requirement.
-           if (route.points.length == existing.points.length) {
-             const double threshold = 0.0001; // ~11 meters tolerance
-             bool isSamePath = true;
-             // Check start, middle, and end points for efficiency
-             final int mid = route.points.length ~/ 2;
-             final List<int> indices = [0, mid, route.points.length - 1];
-             
-             for (final i in indices) {
-               if (i < route.points.length) {
-                 final p1 = route.points[i];
-                 final p2 = existing.points[i];
-                 if ((p1.latitude - p2.latitude).abs() > threshold ||
-                     (p1.longitude - p2.longitude).abs() > threshold) {
-                   isSamePath = false;
-                   break;
-                 }
-               }
-             }
-             
-             if (isSamePath) {
-               isDuplicate = true;
-               break;
-             }
-           }
-         }
-         if (!isDuplicate) {
-           uniqueRawRoutes.add(route);
-         }
-      }
-
-      // 5. SEMICOLON FIX: Guaranteed Alternatives via Forced Diversion
-      // If OSRM returns only 1 route (common on simple grids), we FORCE a different path.
-      if (uniqueRawRoutes.length == 1) {
-        try {
-          final original = uniqueRawRoutes.first;
-          final midIndex = original.points.length ~/ 2;
-          final midPoint = original.points[midIndex];
-          
-          // SMART DIVERSION: Calculate Perpendicular Vector to Main Route
-          // 1. Vector from Start -> End
-          final double dx = end.longitude - start.longitude;
-          final double dy = end.latitude - start.latitude;
-          
-          // 2. Normalize
-          final double len = (dx * dx + dy * dy);
-          if (len > 0) {
-              // 3. Perpendicular Vector (-dy, dx)
-              // 3. Multi-Stage Probing (Standard & Wide)
-              // Offsets: ~500m Left, ~500m Right, ~1.2km Left, ~1.2km Right
-              // 3. Multi-Stage Probing (Standard & Wide)
-              // Offsets: ~500m Left, ~500m Right, ~1.2km Left, ~1.2km Right
-              final List<double> scales = [-0.005, 0.005, -0.012, 0.012];
-              
-              // PARALLEL EXECUTION: Fire all probes at once to save time
-              final futures = scales.map((scale) async {
-                  final probePoint = LatLng(
-                    midPoint.latitude - (dx * scale),
-                    midPoint.longitude + (dy * scale)
-                  );
-                  
-                  try {
-                    return await _getOsrmRoutesWithAlternatives(
-                      start, 
-                      end, 
-                      profile: vehicleType == VehicleType.bike ? 'cycling' : 'driving',
-                      viaPoint: probePoint
-                    );
-                  } catch (e) {
-                    return <RouteModel>[];
-                  }
-              });
-
-              final results = await Future.wait(futures);
-
-              // Check results in order
-              for (final divertedRoutes in results) {
-                 if (divertedRoutes.isNotEmpty) {
-                    final diverted = divertedRoutes.first;
-                    final distDiff = (original.distanceMeters - diverted.distanceMeters).abs();
-                    
-                    // CRITICAL: Ensure it's a DISTINCT but LOGICAL route
-                    if (distDiff > 300 && distDiff < 8000) {
-                       uniqueRawRoutes.add(diverted);
-                       break; // Found a good alternative, stop checking others
-                    }
-                 }
-              }
-          }
-        } catch (e) {
-           ErrorHandler.logError(_tag, 'Failed to generate forced alternative: $e');
-        }
-      }
-
-
-
-      // 6. Analyze each unique route
-      // 6. Analyze each unique route IN PARALLEL
-      final analysisFutures = uniqueRawRoutes.map((route) async {
-        // Weather & Elevation in parallel
-        final weatherFuture = _analyzeRouteWeather(route, vehicleType);
-        final elevationFuture = detectElevationDips(route.points);
-        
-        final results = await Future.wait([weatherFuture, elevationFuture]);
-        final withWeather = results[0] as RouteModel;
-        final dips = results[1] as List<ElevationDip>;
-        
-        // Vehicle checks
-        bool hydroplaning = false;
-        if (vehicleType == VehicleType.truck || vehicleType == VehicleType.car) {
-          if (withWeather.isRaining && route.distanceMeters > 5000) {
-            hydroplaning = true;
-          }
-        }
-
-        return withWeather.copyWithWeather(
-          isRaining: withWeather.isRaining,
-          riskLevel: _calculateVehicleRisk(withWeather, vehicleType, dips),
-          weatherAlerts: withWeather.weatherAlerts,
-          elevationDips: dips,
-          hydroplaningRisk: hydroplaning,
-        );
-      });
-
-      final analyzedRoutes = await Future.wait(analysisFutures);
-
-
-
-      // 6. SORT: Prioritize Safety, then Speed
-      analyzedRoutes.sort((a, b) {
-        final aSafe = a.riskLevel == 'Safe';
-        final bSafe = b.riskLevel == 'Safe';
-
-        if (aSafe && !bSafe) return -1;
-        if (!aSafe && bSafe) return 1;
-        return a.durationSeconds.compareTo(b.durationSeconds);
-      });
-
-      return analyzedRoutes;
-    } catch (e) {
-      ErrorHandler.logError(_tag, 'getSafeRoutesOptions error: $e');
-      rethrow;
+    if (airDistance > 2000) {
+      throw Exception('Ocean/Continental barrier detected. Road route unavailable.');
     }
+
+    // 2. MULTI-PROFILE STRATEGY: Fetch from different networks
+    List<String> profilesToFetch = ['driving'];
+    
+    if (vehicleType == VehicleType.bike) {
+      // Bikes can use all networks
+      profilesToFetch = ['cycling', 'driving', 'walking'];
+    } else if (vehicleType == VehicleType.car || vehicleType == VehicleType.truck) {
+      // Cars limited to driving
+      profilesToFetch = ['driving'];
+    }
+
+    print("🚗 Fetching routes for ${vehicleType.displayName}");
+    print("   Profiles: $profilesToFetch");
+
+    // 3. Fetch ALL profiles in PARALLEL (faster)
+    final futures = profilesToFetch.map((profile) async {
+      try {
+        return await _getOsrmRoutesWithAlternatives(
+          start,
+          end,
+          profile: profile,
+        );
+      } catch (e) {
+        ErrorHandler.logError(_tag, 'Failed to fetch $profile routes: $e');
+        return <RouteModel>[];
+      }
+    });
+
+    final results = await Future.wait(futures);
+    
+    // 4. Combine all routes
+    List<RouteModel> allRawRoutes = [];
+    for (final routes in results) {
+      allRawRoutes.addAll(routes);
+    }
+
+    if (allRawRoutes.isEmpty) {
+      throw Exception('No routes found from OSRM');
+    }
+
+    print("📊 Found ${allRawRoutes.length} raw routes");
+
+    // 5. GEOMETRIC DEDUPLICATION
+    final List<RouteModel> uniqueRoutes = _deduplicateRoutes(allRawRoutes);
+    
+    print("✅ After deduplication: ${uniqueRoutes.length} unique routes");
+
+    // 6. FORCE ALTERNATIVE if only 1 route
+    if (uniqueRoutes.length == 1) {
+      print("⚠️ Only 1 route found, forcing alternative...");
+      
+      final alternative = await _forceAlternativeRoute(
+        uniqueRoutes.first,
+        start,
+        end,
+        vehicleType,
+      );
+      
+      if (alternative != null) {
+        uniqueRoutes.add(alternative);
+        print("✅ Forced alternative generated");
+      } else {
+        print("⚠️ Could not generate forced alternative");
+      }
+    }
+
+    // 7. Analyze all routes IN PARALLEL for speed
+    final analyzedFutures = uniqueRoutes.map((route) async {
+      // Weather & Elevation in parallel
+      final weatherFuture = _analyzeRouteWeather(route, vehicleType);
+      final elevationFuture = detectElevationDips(route.points);
+      
+      final results = await Future.wait([weatherFuture, elevationFuture]);
+      final withWeather = results[0] as RouteModel;
+      final dips = results[1] as List<ElevationDip>;
+      
+      // Vehicle-specific checks
+      bool hydroplaning = false;
+      if (vehicleType == VehicleType.truck || vehicleType == VehicleType.car) {
+        if (withWeather.isRaining && route.distanceMeters > 5000) {
+          hydroplaning = true;
+        }
+      }
+
+      return withWeather.copyWithWeather(
+        isRaining: withWeather.isRaining,
+        riskLevel: _calculateVehicleRisk(withWeather, vehicleType, dips),
+        weatherAlerts: withWeather.weatherAlerts,
+        elevationDips: dips,
+        hydroplaningRisk: hydroplaning,
+      );
+    });
+
+    final analyzedRoutes = await Future.wait(analyzedFutures);
+
+    // 8. SORT: Safety first, then speed
+    analyzedRoutes.sort((a, b) {
+      final aSafe = a.riskLevel == 'Safe';
+      final bSafe = b.riskLevel == 'Safe';
+
+      if (aSafe && !bSafe) return -1;
+      if (!aSafe && bSafe) return 1;
+      return a.durationSeconds.compareTo(b.durationSeconds);
+    });
+
+    // 9. Return top 3 routes
+    final finalRoutes = analyzedRoutes.take(3).toList();
+    
+    print("🎯 Returning ${finalRoutes.length} routes:");
+    for (int i = 0; i < finalRoutes.length; i++) {
+      final r = finalRoutes[i];
+      print("   Route ${i + 1}: ${r.durationMinutes}min, ${(r.distanceMeters / 1000).toStringAsFixed(1)}km, ${r.riskLevel}");
+    }
+
+    return finalRoutes;
+    
+  } catch (e) {
+    ErrorHandler.logError(_tag, 'getSafeRoutesOptions error: $e');
+    rethrow;
+  }
+}
+
+/// Deduplicates routes based on geometric similarity.
+/// 
+/// Removes routes that are effectively identical even if from different profiles.
+List<RouteModel> _deduplicateRoutes(List<RouteModel> routes) {
+  if (routes.length <= 1) return routes;
+  
+  final List<RouteModel> unique = [];
+  
+  for (final route in routes) {
+    bool isDuplicate = false;
+    
+    for (final existing in unique) {
+      // Check distance and time similarity
+      final distDiff = (route.distanceMeters - existing.distanceMeters).abs();
+      final timeDiff = (route.durationSeconds - existing.durationSeconds).abs();
+      
+      if (distDiff < 50 && timeDiff < 10) {
+        isDuplicate = true;
+        break;
+      }
+
+      // Check geometric similarity (path matching)
+      if (route.points.length == existing.points.length) {
+        const double threshold = 0.0001; // ~11 meters
+        bool isSamePath = true;
+        
+        // Check start, middle, and end points
+        final int mid = route.points.length ~/ 2;
+        final indices = [0, mid, route.points.length - 1];
+        
+        for (final i in indices) {
+          if (i < route.points.length) {
+            final p1 = route.points[i];
+            final p2 = existing.points[i];
+            
+            if ((p1.latitude - p2.latitude).abs() > threshold ||
+                (p1.longitude - p2.longitude).abs() > threshold) {
+              isSamePath = false;
+              break;
+            }
+          }
+        }
+        
+        if (isSamePath) {
+          isDuplicate = true;
+          break;
+        }
+      }
+    }
+    
+    if (!isDuplicate) {
+      unique.add(route);
+    }
+  }
+  
+  return unique;
+}
+
+  /// Forces an alternative route by adding a waypoint offset from the midpoint.
+  ///
+  /// When OSRM only returns a single route, this creates a detour through a
+  /// perpendicular offset point to guarantee a visually distinct alternative.
+  Future<RouteModel?> _forceAlternativeRoute(
+    RouteModel originalRoute,
+    LatLng start,
+    LatLng end,
+    VehicleType vehicleType,
+  ) async {
+    try {
+      // Calculate midpoint of the route
+      final midIndex = originalRoute.points.length ~/ 2;
+      final midPoint = originalRoute.points[midIndex];
+
+      // Create an offset point perpendicular to the route direction
+      // Offset by ~500m to get a meaningfully different path
+      const double offsetDegrees = 0.005; // ~500m at equator
+
+      // Calculate bearing from start to end
+      final dLat = end.latitude - start.latitude;
+      final dLon = end.longitude - start.longitude;
+
+      // Perpendicular offset (rotate 90 degrees)
+      final perpLat = midPoint.latitude + (-dLon / (dLat.abs() + dLon.abs()) * offsetDegrees);
+      final perpLon = midPoint.longitude + (dLat / (dLat.abs() + dLon.abs()) * offsetDegrees);
+
+      final viaPoint = LatLng(perpLat, perpLon);
+
+      // Fetch route with via point to force a detour
+      final profile = vehicleType == VehicleType.bike ? 'cycling' : 'driving';
+      final routes = await _getOsrmRoutesWithAlternatives(
+        start,
+        end,
+        profile: profile,
+        viaPoint: viaPoint,
+      );
+
+      if (routes.isNotEmpty) {
+        // Return the first route that is meaningfully different
+        for (final route in routes) {
+          final distDiff = (route.distanceMeters - originalRoute.distanceMeters).abs();
+          if (distDiff > 100) {
+            return route;
+          }
+        }
+        // If no meaningfully different route, return the first one anyway
+        return routes.first;
+      }
+    } catch (e) {
+      ErrorHandler.logError(_tag, 'Force alternative route error: $e');
+    }
+    return null;
   }
 
   /// Calculates vehicle-specific risk level based on weather, dips, and road conditions.
