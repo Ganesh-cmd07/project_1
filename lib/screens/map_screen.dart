@@ -78,7 +78,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   // VEHICLE MODE & SETTINGS
   VehicleType _selectedVehicle = VehicleType.bike;
   String _selectedLanguage = 'en-IN'; // English-India default (ENGLISH FALLBACK)
-  static const Map<String, String> _languageNames = {
+  final Map<String, String> _languageNames = const {
     'en-IN': 'English',
     'hi-IN': 'हिंदी (Hindi)',
     'te-IN': 'తెలుగు (Telugu)',
@@ -87,8 +87,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   };
 
   // Settings
-  static const double _recalcThresholdMeters = 50.0;
-  static const bool _liveTrackingEnabled = true;
+  final double _recalcThresholdMeters = 50.0;
+  final bool _liveTrackingEnabled = true;
 
   // RAIN MODE TOGGLE (HIGH-CONTRAST UI)
   /// When enabled, UI elements are scaled to 30% screen height and use
@@ -1432,12 +1432,27 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
               // - Normal Mode: Google Maps Standard (Matches Traffic Layer style)
               // - Navigation Mode: Google Maps Traffic Layer
               TileLayer(
-                urlTemplate: _isNavigating
-                    ? 'https://mt0.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}' // Traffic when driving
-                    : 'https://mt0.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', // Standard Google Map (No Traffic)
-                subdomains: const ['mt0', 'mt1', 'mt2', 'mt3'],
+                urlTemplate:
+                    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.rainsafe.navigator',
               ),
+              
+              // RAIN MODE OVERLAY (Border only)
+              if (_rainModeEnabled)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.3),
+                          width: 8.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
               PolylineLayer(
                 polylines: [
                   // 1. ALTERNATIVE ROUTES (Grey/Ghost)
@@ -1630,27 +1645,33 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Text(
-                                    _selectedVehicle.displayName,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
+                              
+                            // Icon
+                            Icon(
+                              // Outline for pending, Fill for verified
+                              isVerified ? Icons.warning : Icons.warning_amber_rounded,
+                              color: isVerified 
+                                  ? (_rainModeEnabled ? Colors.red : Colors.red) 
+                                  : (_rainModeEnabled ? Colors.orange : Colors.orange),
+                              size: _rainModeEnabled ? 40 : 30,
+                            ),
+                            
+                            // Question mark badge for pending
+                            if (!isVerified)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(_selectedVehicle.icon, style: const TextStyle(fontSize: 14)),
-                                  const SizedBox(width: 4),
-                                  // Dropdown visual indicator
-                                  Icon(
-                                    Icons.keyboard_arrow_down, 
-                                    color: Colors.white.withValues(alpha: 0.7), 
-                                    size: 16
+                                  child: const Icon(
+                                    Icons.question_mark,
+                                    size: 10,
+                                    color: Colors.black,
                                   ),
-                                ],
+                                ),
                               ),
                             ],
                           ),
