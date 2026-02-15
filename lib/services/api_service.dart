@@ -504,7 +504,7 @@ class ApiService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'locations': locations}),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 4)); // FAIL FAST: 4s timeout for elevation
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
@@ -943,7 +943,7 @@ List<RouteModel> _deduplicateRoutes(List<RouteModel> routes) {
           '?overview=full&geometries=geojson&alternatives=true&steps=true');
 
       final response = await http.get(url, headers: _englishHeaders).timeout(
-            const Duration(seconds: 30),
+            const Duration(seconds: 8),
           );
 
       if (response.statusCode == 200) {
