@@ -1,0 +1,8 @@
+# Netlify Configuration
+# This file configures Netlify to handle Flutter Web's Single Page Application routing.
+
+# Redirect all traffic to index.html so Flutter can handle routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
