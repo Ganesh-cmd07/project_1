@@ -1171,7 +1171,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     try {
       // Submit to Firebase with weather validation
       // Pass the ApiService instance (api) for weather cross-check
-      await FirebaseService.submitHazardReport(report, api);
+      final String? reportId = await FirebaseService.submitHazardReport(report, api);
       
       if (!mounted) return;
       
@@ -1183,10 +1183,20 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
       
       HapticFeedback.heavyImpact();
       
-      ErrorHandler.showSuccess(
-        context,
-        '$hazardType reported successfully!\nThank you for keeping others safe.',
-      );
+      if (reportId != null) {
+        ErrorHandler.showSuccess(
+          context,
+          '$hazardType reported successfully!\nID: $reportId\nThank you for keeping others safe.',
+        );
+      } else {
+        // SHADOW BAN CASE:
+        // User is banned, show "Submitted for Review" to avoid tipping them off too much
+        // but hint that it might not be instant.
+        ErrorHandler.showSuccess(
+          context,
+          '$hazardType submitted for review.\nThank you for your report.',
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       HapticFeedback.lightImpact(); // HAPTIC FEEDBACK for error

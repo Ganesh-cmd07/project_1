@@ -71,14 +71,14 @@ class FirebaseService {
   }
 
   /// Submit a hazard report with validation and ID tracking.
-  static Future<bool> submitHazardReport(
+  static Future<String?> submitHazardReport(
     HazardReport report,
     ApiService apiService,
   ) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) {
       ErrorHandler.logError(_tag, '❌ Submission failed: No user ID');
-      return false;
+      return null;
     }
 
     // LIAR ALGORITHM: Check if user is banned
@@ -86,7 +86,8 @@ class FirebaseService {
     if (!isTrusted) {
       ErrorHandler.logError(_tag, '🚫 Shadow-ban: User report ignored (Low Reputation)');
       // Return true to fake success to the prankster (Shadow ban)
-      return true;
+      // Return null to fake success to the prankster (Shadow ban) but technically ignored
+      return null;
     }
 
     try {
@@ -145,7 +146,7 @@ class FirebaseService {
         '   Trust: $adjustedTrustScore (Weather Validated: $weatherValidated)',
       );
 
-      return true;
+      return docRef.id;
       
     } catch (e) {
       ErrorHandler.logError(_tag, '❌ Hazard submission error: $e');
