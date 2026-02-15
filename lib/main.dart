@@ -31,7 +31,7 @@ Future<void> _initializeFirebase() async {
     
     debugPrint("✅ Anonymous Auth Successful: ${userCredential.user?.uid}");
     
-  } catch (e, stack) {
+  } catch (e) {
     debugPrint("⚠️ FIREBASE INITIALIZATION FAILED (non-fatal)");
     debugPrint("   Error: $e");
     debugPrint("   App will continue without hazard reporting features");

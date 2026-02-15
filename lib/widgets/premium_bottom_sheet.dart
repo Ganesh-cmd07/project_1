@@ -187,7 +187,7 @@ class PremiumBottomSheet extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               unit.isNotEmpty ? "$value$unit" : value,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,

@@ -1,0 +1,47 @@
+Resolving dependencies...
+Downloading packages...
+  characters 1.4.0 (1.4.1 available)
+  dbus 0.7.11 (0.7.12 available)
+  ffi 2.1.5 (2.2.0 available)
+  hooks 1.0.0 (1.0.1 available)
+  matcher 0.12.17 (0.12.18 available)
+  material_color_utilities 0.11.1 (0.13.0 available)
+  meta 1.17.0 (1.18.1 available)
+  mgrs_dart 2.0.0 (3.0.0 available)
+  objective_c 9.2.5 (9.3.0 available)
+  proj4dart 2.1.0 (3.0.0 available)
+  source_span 1.10.1 (1.10.2 available)
+  test_api 0.7.7 (0.7.9 available)
+  unicode 0.3.1 (1.1.9 available)
+  url_launcher 6.2.6 (6.3.2 available)
+! url_launcher_android 6.3.10 (overridden) (6.3.28 available)
+  url_launcher_ios 6.3.6 (6.4.0 available)
+Got dependencies!
+16 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Gradle task 'assembleDebug'...                          
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> Error while evaluating property 'friendPathsSet$kotlin_gradle_plugin_common' of task ':app:compileDebugKotlin'.
+   > Could not resolve all files for configuration ':app:debugCompileClasspath'.
+      > Failed to transform armeabi_v7a_debug-1.0.0-587c18f873b8ab57330422bce09047420d9c7f42.jar (io.flutter:armeabi_v7a_debug:1.0.0-587c18f873b8ab57330422bce09047420d9c7f42) to match attributes {artifactType=android-classes-jar, org.gradle.category=library, org.gradle.libraryelements=jar, org.gradle.status=release, org.gradle.usage=java-api}.
+         > Execution failed for JetifyTransform: C:\Users\24eg1\.gradle\caches\modules-2\files-2.1\io.flutter\armeabi_v7a_debug\1.0.0-587c18f873b8ab57330422bce09047420d9c7f42\13b8e2a371faf0f9d5a24b131cb1fbc822f5658c\armeabi_v7a_debug-1.0.0-587c18f873b8ab57330422bce09047420d9c7f42.jar.
+            > Java heap space
+      > Failed to transform arm64_v8a_debug-1.0.0-587c18f873b8ab57330422bce09047420d9c7f42.jar (io.flutter:arm64_v8a_debug:1.0.0-587c18f873b8ab57330422bce09047420d9c7f42) to match attributes {artifactType=android-classes-jar, org.gradle.category=library, org.gradle.libraryelements=jar, org.gradle.status=release, org.gradle.usage=java-api}.
+         > Execution failed for JetifyTransform: C:\Users\24eg1\.gradle\caches\modules-2\files-2.1\io.flutter\arm64_v8a_debug\1.0.0-587c18f873b8ab57330422bce09047420d9c7f42\53117dcbf65d610c00b2d5c529bf4e1b1db145be\arm64_v8a_debug-1.0.0-587c18f873b8ab57330422bce09047420d9c7f42.jar.
+            > Java heap space
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3m 21s
+Running Gradle task 'assembleDebug'...                            203.1s
+Gradle task assembleDebug failed with exit code 1

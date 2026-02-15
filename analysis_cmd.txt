@@ -1,0 +1,64 @@
+Resolving dependencies...
+Downloading packages...
+  characters 1.4.0 (1.4.1 available)
+  dbus 0.7.11 (0.7.12 available)
+  ffi 2.1.5 (2.2.0 available)
+  hooks 1.0.0 (1.0.1 available)
+  matcher 0.12.17 (0.12.18 available)
+  material_color_utilities 0.11.1 (0.13.0 available)
+  meta 1.17.0 (1.18.1 available)
+  mgrs_dart 2.0.0 (3.0.0 available)
+  objective_c 9.2.5 (9.3.0 available)
+  proj4dart 2.1.0 (3.0.0 available)
+  source_span 1.10.1 (1.10.2 available)
+  test_api 0.7.7 (0.7.9 available)
+  unicode 0.3.1 (1.1.9 available)
+  url_launcher 6.2.6 (6.3.2 available)
+! url_launcher_android 6.3.10 (overridden) (6.3.28 available)
+  url_launcher_ios 6.3.6 (6.4.0 available)
+Got dependencies!
+16 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing project_1...                                          
+
+   info - Local variables should be final - lib\models\route_model.dart:457:5 - prefer_final_locals
+   info - Local variables should be final - lib\models\route_model.dart:466:9 - prefer_final_locals
+   info - The import of 'package:flutter/services.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' - lib\screens\home_screen.dart:2:8 - unnecessary_import
+warning - Unused import: '../theme/app_theme.dart' - lib\screens\home_screen.dart:7:8 - unused_import
+   info - Don't invoke 'print' in production code - lib\screens\home_screen.dart:74:7 - avoid_print
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:244:22 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:247:26 - deprecated_member_use
+   info - Method invocation or property access on a 'dynamic' target - lib\screens\home_screen.dart:402:24 - avoid_dynamic_calls
+warning - The declaration '_checkForSavedRoute' isn't referenced - lib\screens\map_screen.dart:191:16 - unused_element
+warning - The declaration '_showLanguageSelectionDialog' isn't referenced - lib\screens\map_screen.dart:383:8 - unused_element
+   info - Don't invoke 'print' in production code - lib\screens\map_screen.dart:827:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\map_screen.dart:834:8 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\map_screen.dart:846:10 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\map_screen.dart:852:7 - avoid_print
+   info - The 'if' statement could be replaced by a null-aware assignment - lib\screens\map_screen.dart:946:7 - prefer_conditional_assignment
+   info - The 'if' statement could be replaced by a null-aware assignment - lib\screens\map_screen.dart:953:7 - prefer_conditional_assignment
+   info - Don't invoke 'print' in production code - lib\screens\map_screen.dart:1416:14 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\map_screen.dart:1768:45 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\map_screen.dart:1772:27 - avoid_print
+   info - Local variables should be final - lib\screens\map_screen.dart:2002:5 - prefer_final_locals
+   info - The variable 'drop' should be final - lib\screens\map_screen.dart:2099:14 - prefer_final_in_for_each
+warning - The value of the field '_debounceTimer' isn't used - lib\services\api_service.dart:115:10 - unused_field
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:136:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:166:14 - avoid_print
+warning - The '!' will have no effect because the receiver can't be null - lib\services\api_service.dart:174:58 - unnecessary_non_null_assertion
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:183:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:186:7 - avoid_print
+   info - Method invocation or property access on a 'dynamic' target - lib\services\api_service.dart:213:27 - avoid_dynamic_calls
+   info - Method invocation or property access on a 'dynamic' target - lib\services\api_service.dart:214:30 - avoid_dynamic_calls
+   info - Method invocation or property access on a 'dynamic' target - lib\services\api_service.dart:224:35 - avoid_dynamic_calls
+   info - Method invocation or property access on a 'dynamic' target - lib\services\api_service.dart:224:57 - avoid_dynamic_calls
+   info - Unnecessary 'await' - lib\services\api_service.dart:247:16 - unnecessary_await_in_return
+   info - Local variables should be final - lib\services\api_service.dart:651:7 - prefer_final_locals
+   info - 'background' is deprecated and shouldn't be used. Use surface instead. This feature was deprecated after v3.18.0-0.1.pre - lib\theme\app_theme.dart:50:9 - deprecated_member_use
+   info - 'onBackground' is deprecated and shouldn't be used. Use onSurface instead. This feature was deprecated after v3.18.0-0.1.pre - lib\theme\app_theme.dart:55:9 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\theme\app_theme.dart:84:34 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\theme\app_theme.dart:96:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\theme\app_theme.dart:120:42 - deprecated_member_use
+  error - A value of type 'List<SearchResult>' can't be assigned to a variable of type 'List<String>' - lib\widgets\search_widget.dart:45:26 - invalid_assignment
+  error - A value of type 'List<SearchResult>' can't be assigned to a variable of type 'List<String>' - lib\widgets\search_widget.dart:56:24 - invalid_assignment
+

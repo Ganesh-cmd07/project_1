@@ -198,97 +198,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     }
   }
 
-  /// Restores saved route if available (Offline capabilities).
-  Future<void> _checkForSavedRoute() async {
-    final savedRoute = await api.getSavedRoute();
-    if (savedRoute != null && mounted) {
-      // Ask user if they want to restore
-      final shouldRestore = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Resume Navigation?'),
-          content: const Text('Found an active route from your last session. Would you like to resume?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('No'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Resume'),
-            ),
-          ],
-        ),
-      );
 
-      if (shouldRestore == true && mounted) {
-        setState(() {
-          _currentRoute = savedRoute;
-          routePoints = savedRoute.points;
-          _routeInstructions = savedRoute.steps.map((step) {
-            return {
-              'instruction': step.instruction,
-              'distance': step.distance,
-              'maneuver': {
-                'type': step.maneuverType,
-                'location': step.location
-              }
-            };
-          }).toList();
-          
-          // Restore visual elements
-          _weatherMarkers = savedRoute.weatherAlerts.map<Marker>((alert) {
-             return Marker(
-               point: alert.point,
-               width: 80, 
-               height: 80,
-               child: Column(
-                 children: [
-                   Icon(Icons.cloud, color: _rainModeEnabled ? Colors.lightBlueAccent : Colors.blue, size: 30),
-                   Container(
-                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                     decoration: BoxDecoration(
-                       color: Colors.white,
-                       borderRadius: BorderRadius.circular(4),
-                       border: Border.all(color: Colors.grey.shade300),
-                     ),
-                     child: Text(
-                       '${alert.temperature.toStringAsFixed(0)}°',
-                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black87),
-                     ),
-                   ),
-                 ],
-               ),
-             );
-          }).toList();
-          
-          _dipMarkers = savedRoute.elevationDips.map<Marker>((dip) {
-            return Marker(
-              point: dip.point,
-              width: 60,
-              height: 60,
-              child: Icon(Icons.water, color: dip.isHighRisk ? Colors.red : Colors.orange, size: 35),
-            );
-          }).toList();
-
-          _isNavigating = true; // Auto-start navigation
-          statusMessage = "Route restored";
-          
-          // Re-center map
-          if (routePoints.isNotEmpty) {
-             mapController.fitCamera(CameraFit.bounds(
-                bounds: LatLngBounds.fromPoints(routePoints),
-                padding: const EdgeInsets.all(50)));
-          }
-        });
-        
-        _startLiveTracking();
-        _speak("Resuming navigation.");
-      } else {
-        await api.clearSavedRoute();
-      }
-    }
-  }
 
   @override
   void dispose() {
@@ -432,61 +342,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   /// Shows a dialog to select voice language.
   /// 
   /// ENGLISH FALLBACK: English is always first in the list.
-  void _showLanguageSelectionDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text(
-          'Voice Language',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _languageNames.entries.map((entry) {
-            return ListTile(
-              title: Text(
-                entry.value,
-                style: const TextStyle(color: Colors.white),
-              ),
-              tileColor: _selectedLanguage == entry.key
-                  ? Colors.blue.withValues(alpha: 0.1)
-                  : null,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: BorderSide(
-                  color: _selectedLanguage == entry.key 
-                      ? Colors.blue 
-                      : Colors.grey.shade300,
-                  width: _selectedLanguage == entry.key ? 2 : 1,
-                ),
-              ),
-              onTap: () async {
-                HapticFeedback.mediumImpact(); // HAPTIC FEEDBACK
-                setState(() => _selectedLanguage = entry.key);
-                try {
-                  await flutterTts.setLanguage(_selectedLanguage);
-                } catch (e) {
-                  // ENGLISH FALLBACK if language not supported
-                  await flutterTts.setLanguage('en-IN');
-                  ErrorHandler.logError('MapScreen', 'Language not supported, falling back to English');
-                }
-                if (!ctx.mounted) return;
-                Navigator.pop(ctx);
-                _speak('Language changed');
-              },
-            );
-          }).toList(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: Colors.blue)),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   // ===============================================================
   // SOS EMERGENCY FEATURE
@@ -880,14 +736,14 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   /// 
   /// HAPTIC FEEDBACK: Strong vibration on start.
   void _startNavigation() {
-    print("🔘 DEBUG: _startNavigation called"); // FORCE LOG
+    debugPrint("🔘 DEBUG: _startNavigation called"); // FORCE LOG
     
     // FAILSAFE: Ensure we have a start position
     // If GPS hasn't locked yet, use the route's starting point
     LatLng? startPos = _snappedGPSPosition ?? _startCoord;
     
     if (startPos == null && routePoints.isNotEmpty) {
-       print("🔘 DEBUG: Start coords missing, using route start point as fallback");
+       debugPrint("🔘 DEBUG: Start coords missing, using route start point as fallback");
        startPos = routePoints.first;
        
        // Update _startCoord so SOS and other features work if needed
@@ -899,13 +755,13 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     }
 
     if (startPos == null) {
-         print("🔘 DEBUG: No start position available!");
+         debugPrint("🔘 DEBUG: No start position available!");
          ErrorHandler.showError(context, "Waiting for GPS signal...");
          return; 
     }
 
     try {
-      print("🔘 DEBUG: Attempting to start navigation...");
+      debugPrint("🔘 DEBUG: Attempting to start navigation...");
       
       // 1. Update State FIRST to ensure UI responsiveness
       setState(() => _isNavigating = true);
@@ -999,16 +855,12 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     try {
       // Geocoding: PREFER PASSED COORDINATES if available
       LatLng? sCoord = widget.startCoords;
-      if (sCoord == null) {
-          sCoord = (startText == 'Current Location' || startText.isEmpty)
+      sCoord ??= (startText == 'Current Location' || startText.isEmpty)
               ? (_startCoord ?? await api.getCurrentLocation())
               : await api.getCoordinates(startText);
-      }
 
       LatLng? eCoord = widget.endCoords;
-      if (eCoord == null) {
-          eCoord = await api.getCoordinates(endText);
-      }
+      eCoord ??= await api.getCoordinates(endText);
 
       if (sCoord == null || eCoord == null) {
         if (!isRefetch && mounted) {
@@ -1484,7 +1336,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
         children: [
           // DEBUG STATE
           Builder(builder: (context) {
-             print("🔘 DEBUG: BUILD STATE -> Nav: $_isNavigating, RoutePoints: ${routePoints.length}");
+             debugPrint("🔘 DEBUG: BUILD STATE -> Nav: $_isNavigating, RoutePoints: ${routePoints.length}");
              return const SizedBox.shrink();
           }),
 
@@ -2043,11 +1895,11 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                   SizedBox(
                     height: buttonSize,
                     child: Listener(
-                      onPointerDown: (_) => print("🔘 POINTER DOWN on Start Button"),
+                      onPointerDown: (_) => debugPrint("🔘 POINTER DOWN on Start Button"),
                       child: FloatingActionButton.extended(
                         heroTag: "start_nav_btn",
                         onPressed: () {
-                          print("🔘 BUTTON: Start Clicked via onPressed");
+                          debugPrint("🔘 BUTTON: Start Clicked via onPressed");
                           _startNavigation();
                         },
                         backgroundColor: Colors.green,
@@ -2272,11 +2124,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
   Widget _buildWeatherEffect() {
     // Determine mode: Explicit simulation OR Rain Mode
-    String mode = _activeWeatherMode;
-    bool showEffect = mode == 'rain' || mode == 'storm' || mode == 'cloudy' || (_rainModeEnabled && mode != 'clear');
-    
-    // If rain mode is enabled via toggle, treat as rain unless storm selected
-    if (_rainModeEnabled && mode == 'clear') mode = 'rain';
+    final String mode = (_rainModeEnabled && _activeWeatherMode == 'clear') ? 'rain' : _activeWeatherMode;
+    final bool showEffect = mode == 'rain' || mode == 'storm' || mode == 'cloudy';
 
     if (!showEffect && mode == 'clear') return const SizedBox.shrink();
 
