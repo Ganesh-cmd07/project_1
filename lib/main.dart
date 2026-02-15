@@ -6,30 +6,38 @@ import 'package:project_1/screens/home_screen.dart';
 import 'package:project_1/theme/app_theme.dart';
 
 void main() async {
-  // 1. Ensure Flutter bindings are ready
   WidgetsFlutterBinding.ensureInitialized();
   debugPrint("🚀 STARTUP: Flutter Bindings Initialized");
 
+  // Start Firebase in background (don't await)
+  _initializeFirebase();
+
+  debugPrint("🚀 STARTUP: Starting RainSafe Navigator...");
+  runApp(const RainSafeApp());
+}
+
+Future<void> _initializeFirebase() async {
   try {
-    // 2. Initialize Firebase FIRST
-    debugPrint("🚀 STARTUP: Initializing Firebase...");
+    debugPrint("🔥 Initializing Firebase...");
+    
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    debugPrint("🚀 STARTUP: Firebase Initialized");
+    
+    debugPrint("✅ Firebase Initialized Successfully");
 
-    // 3. Authenticate SECOND (Unlocks the database for the Liar Algorithm)
-    debugPrint("🚀 STARTUP: Signing in anonymously...");
-    await FirebaseAuth.instance.signInAnonymously();
-    debugPrint("✅ RainSafe Apex: Anonymous Auth Successful");
+    debugPrint("🔐 Signing in anonymously...");
+    final userCredential = await FirebaseAuth.instance.signInAnonymously();
+    
+    debugPrint("✅ Anonymous Auth Successful: ${userCredential.user?.uid}");
+    
   } catch (e, stack) {
-    debugPrint("❌ FIREBASE/AUTH ERROR: $e");
-    debugPrint(stack.toString());
+    debugPrint("⚠️ FIREBASE INITIALIZATION FAILED (non-fatal)");
+    debugPrint("   Error: $e");
+    debugPrint("   App will continue without hazard reporting features");
   }
-
-  debugPrint("🚀 STARTUP: Calling runApp()...");
-  runApp(const RainSafeApp());
 }
+
 
 class RainSafeApp extends StatelessWidget {
   const RainSafeApp({super.key});
