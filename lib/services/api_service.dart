@@ -507,7 +507,7 @@ class ApiService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'locations': locations}),
-      ).timeout(const Duration(seconds: 4)); // FAIL FAST: 4s timeout for elevation
+      ).timeout(const Duration(seconds: 8)); // FAIL FAST: 8s timeout for elevation
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
