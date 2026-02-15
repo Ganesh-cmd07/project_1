@@ -449,7 +449,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildSavedRoutesList() {
     if (_searchHistory.isEmpty) {
-        return const Center(child: Text("No recent searches", style: TextStyle(color: Colors.white38)));
+        return Align(
+          alignment: Alignment.center,
+          child: Column(
+            children: [
+              Icon(Icons.history, color: Colors.white.withValues(alpha: 0.2), size: 40),
+              const SizedBox(height: 8),
+              Text(
+                "No recent searches",
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        );
     }
 
     return SizedBox(
@@ -530,8 +546,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         style: ElevatedButton.styleFrom(
           padding: EdgeInsets.zero,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 20,
-          shadowColor: const Color(0xFF00F0FF).withValues(alpha: 0.4),
+          elevation: 25,
+          shadowColor: const Color(0xFF00F0FF).withValues(alpha: 0.5),
         ),
         onPressed: () {
           Navigator.push(

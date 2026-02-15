@@ -1473,17 +1473,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                size: _rainModeEnabled ? 40 : 30,
                              ),
                              
-                             // Question mark badge for pending
-                             if (!isVerified)
-                               const Positioned(
-                                 right: 0,
-                                 bottom: 0,
-                                 child: Icon(
-                                   Icons.question_mark,
-                                   size: 10,
-                                   color: Colors.black,
-                                 ),
-                               ),
+
                            ],
                          ),
                        );
