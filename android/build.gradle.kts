@@ -1,12 +1,7 @@
 // Top-level build file for RainSafe Navigator Flutter App
 // Supports: flutter_map, geolocator, flutter_tts, shared_preferences, permission_handler
 
-plugins {
-    id("com.android.application")
-    id("kotlin-android")
-    id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services") // This should be here
-}
+
 
 
 allprojects {

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'dart:async'; // For Timer
 import 'dart:ui'; // For ImageFilter
 import 'map_screen.dart';
 import '../services/api_service.dart';
-import '../theme/app_theme.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
          if (mounted) setState(() => _isLoadingWeather = false);
       }
     } catch (e) {
-      print("Error loading weather: $e");
+      debugPrint("Error loading weather: $e");
       if (mounted) setState(() => _isLoadingWeather = false);
     }
   }
@@ -241,10 +241,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.15),
+            color: color.withValues(alpha: 0.15),
             blurRadius: 120,
             spreadRadius: 40,
           ),
@@ -399,7 +399,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ],
                   ),
                    Text(
-                    "${temp.toStringAsFixed(1)}°",
+                    "${(temp as num).toStringAsFixed(1)}°",
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 42,

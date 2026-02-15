@@ -454,7 +454,7 @@ class RouteStep {
     final location = (maneuver?['location'] as List<dynamic>?) ?? [0.0, 0.0];
     
     // Construct readable instruction
-    String name = (json['name'] as String?) ?? '';
+    final String name = (json['name'] as String?) ?? '';
     final String type = (maneuver?['type'] as String?) ?? 'continue';
     final String modifier = (maneuver?['modifier'] as String?) ?? '';
     
@@ -463,7 +463,7 @@ class RouteStep {
     // OSRM usually gives "type": "turn", "modifier": "left"
     if (type == 'turn' || type == 'merge' || type == 'fork') {
       if (modifier.isNotEmpty) {
-        String direction = modifier.replaceAll('_', ' ');
+        final String direction = modifier.replaceAll('_', ' ');
         if (name.isNotEmpty) {
           instruction = 'Turn $direction onto $name';
         } else {

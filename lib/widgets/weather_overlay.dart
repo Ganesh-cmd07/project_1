@@ -1,7 +1,7 @@
 import 'dart:math';
-import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+
 
 /// A high-performance weather overlay using CustomPainter.
 /// Supports: 'clear', 'cloudy', 'rain', 'storm'.
@@ -53,14 +53,14 @@ class _WeatherOverlayState extends State<WeatherOverlay> with SingleTickerProvid
     
     // Initialize based on mode
     if (widget.weatherMode == 'rain' || widget.weatherMode == 'storm') {
-      int count = widget.weatherMode == 'storm' ? 300 : 100;
+      final int count = widget.weatherMode == 'storm' ? 300 : 100;
       for (int i = 0; i < count; i++) {
         _particles.add(_createRainDrop());
       }
     }
     
     if (widget.weatherMode == 'cloudy' || widget.weatherMode == 'storm') {
-        int cloudCount = widget.weatherMode == 'storm' ? 5 : 3;
+        final int cloudCount = widget.weatherMode == 'storm' ? 5 : 3;
         for (int i = 0; i < cloudCount; i++) {
           _clouds.add(_createCloud());
         }
@@ -138,7 +138,7 @@ class _WeatherOverlayState extends State<WeatherOverlay> with SingleTickerProvid
     if (widget.weatherMode == 'rain' || widget.weatherMode == 'storm') {
        if (_particles.isEmpty) _resetParticles();
        
-       for (var p in _particles) {
+       for (final p in _particles) {
          p.y += p.speed;
          if (p.y > 1.1) {
            // Reset to top
@@ -152,7 +152,7 @@ class _WeatherOverlayState extends State<WeatherOverlay> with SingleTickerProvid
     if (widget.weatherMode == 'cloudy' || widget.weatherMode == 'storm') {
        if (_clouds.isEmpty) _resetParticles();
 
-       for (var c in _clouds) {
+       for (final c in _clouds) {
          c.x += c.speed;
          if (c.x > 1.3) {
            c.x = -0.3; // Loop back
@@ -203,7 +203,7 @@ class _WeatherPainter extends CustomPainter {
     // 2. DRAW CLOUDS
     // Drawing fluffy clouds procedurally is expensive, so we use simple soft circles/ovals
     // or we could use an asset image. For pure code, we'll draw soft gradients.
-    for (var c in clouds) {
+    for (final c in clouds) {
       final paint = Paint()
         ..color = (mode == 'storm' ? Colors.black : Colors.white)
             .withValues(alpha: c.opacity)
@@ -228,7 +228,7 @@ class _WeatherPainter extends CustomPainter {
         ..strokeWidth = 1.5
         ..strokeCap = StrokeCap.round;
 
-      for (var p in particles) {
+      for (final p in particles) {
         final start = Offset(p.x * size.width, p.y * size.height);
         final end = Offset(
           start.dx - (p.speed * size.width * 0.2), // Slight wind tilt

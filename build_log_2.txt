@@ -1,0 +1,44 @@
+Resolving dependencies...
+Downloading packages...
+  characters 1.4.0 (1.4.1 available)
+  dbus 0.7.11 (0.7.12 available)
+  ffi 2.1.5 (2.2.0 available)
+  hooks 1.0.0 (1.0.1 available)
+  matcher 0.12.17 (0.12.18 available)
+  material_color_utilities 0.11.1 (0.13.0 available)
+  meta 1.17.0 (1.18.1 available)
+  mgrs_dart 2.0.0 (3.0.0 available)
+  objective_c 9.2.5 (9.3.0 available)
+  proj4dart 2.1.0 (3.0.0 available)
+  source_span 1.10.1 (1.10.2 available)
+  test_api 0.7.7 (0.7.9 available)
+  unicode 0.3.1 (1.1.9 available)
+  url_launcher 6.2.6 (6.3.2 available)
+! url_launcher_android 6.3.10 (overridden) (6.3.28 available)
+  url_launcher_ios 6.3.6 (6.4.0 available)
+Got dependencies!
+16 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Gradle task 'assembleDebug'...                          
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file 'C:\Users\24eg1\OneDrive\Documents\Rain-safe-navigator\project_1\android\app\build.gradle.kts' line: 1
+
+* What went wrong:
+Plugin [id: 'com.google.gms.google-services'] was not found in any of the following sources:
+
+- Gradle Core Plugins (plugin is not in 'org.gradle' namespace)
+- Included Builds (No included builds contain this plugin)
+- Plugin Repositories (plugin dependency must include a version number for this source)
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 5s
+Running Gradle task 'assembleDebug'...                              5.6s
+Gradle task assembleDebug failed with exit code 1

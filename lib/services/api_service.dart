@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import '../models/route_model.dart';
 import '../utils/error_handler.dart';
 
@@ -112,7 +113,7 @@ class ApiService {
 
 
 
-  Timer? _debounceTimer;
+
 
   /// Gets suggestions: First checks History, then API (Debounced).
   /// 
@@ -133,7 +134,7 @@ class ApiService {
       final prefs = await SharedPreferences.getInstance();
       final history = prefs.getStringList('search_history') ?? [];
 
-      print("DEBUG: Searching for '$query'"); // DEBUG LOG
+      debugPrint("DEBUG: Searching for '$query'"); // DEBUG LOG
 
       if (query.isEmpty) {
         // Convert history strings to SearchResult objects
@@ -163,15 +164,16 @@ class ApiService {
           List<SearchResult> apiResults = await _fetchPhotonSuggestions(query, userLocation);
           
           if (apiResults.isEmpty) {
-             print("DEBUG: Photon returned empty, trying Nominatim...");
+             debugPrint("DEBUG: Photon returned empty, trying Nominatim...");
              apiResults = await _fetchNominatimSuggestions(query);
           }
           
           // SORT BY DISTANCE (Client-side refinement)
           if (userLocation != null) {
+              final LatLng location = userLocation;
               apiResults.sort((a, b) {
-                  final distA = a.distanceTo(userLocation!);
-                  final distB = b.distanceTo(userLocation!);
+                  final distA = a.distanceTo(location);
+                  final distB = b.distanceTo(location);
                   return distA.compareTo(distB);
               });
           }
@@ -180,10 +182,10 @@ class ApiService {
         }
       }
 
-      print("DEBUG: Found ${results.length} results"); // DEBUG LOG
+      debugPrint("DEBUG: Found ${results.length} results"); // DEBUG LOG
       return results.toSet().toList();
     } catch (e) {
-      print("DEBUG: Error - $e"); // DEBUG LOG
+      debugPrint("DEBUG: Error - $e"); // DEBUG LOG
       ErrorHandler.logError(_tag, 'Failed to get suggestions: $e');
       return [];
     }
@@ -210,8 +212,9 @@ class ApiService {
          final features = data['features'] as List<dynamic>;
          
          final List<SearchResult> results = features.map<SearchResult?>((f) {
-            final props = f['properties'] as Map<String, dynamic>;
-            final geometry = f['geometry'] as Map<String, dynamic>?;
+            final fMap = f as Map<String, dynamic>;
+            final props = fMap['properties'] as Map<String, dynamic>;
+            final geometry = fMap['geometry'] as Map<String, dynamic>?;
             
             final name = props['name'] as String?;
             
@@ -221,7 +224,7 @@ class ApiService {
                 final coords = geometry['coordinates'] as List<dynamic>;
                 if (coords.length >= 2) {
                    // GeoJSON is [lon, lat]
-                   coord = LatLng(coords[1].toDouble(), coords[0].toDouble());
+                   coord = LatLng((coords[1] as num).toDouble(), (coords[0] as num).toDouble());
                 }
             }
 
@@ -244,7 +247,7 @@ class ApiService {
      } catch (e) {
         ErrorHandler.logError(_tag, 'Photon API error: $e');
         // Fallback to Nominatim if Photon fails
-        return await _fetchNominatimSuggestions(query);
+        return _fetchNominatimSuggestions(query);
      }
      return [];
   }
@@ -647,8 +650,8 @@ Future<List<RouteModel>> getSafeRoutesOptions(
       profilesToFetch = ['driving'];
     }
 
-    print("🚗 Fetching routes for ${vehicleType.displayName}");
-    print("   Profiles: $profilesToFetch");
+    debugPrint("🚗 Fetching routes for ${vehicleType.displayName}");
+    debugPrint("   Profiles: $profilesToFetch");
 
     // 3. Fetch ALL profiles in PARALLEL (faster)
     final futures = profilesToFetch.map((profile) async {
@@ -667,7 +670,7 @@ Future<List<RouteModel>> getSafeRoutesOptions(
     final results = await Future.wait(futures);
     
     // 4. Combine all routes
-    List<RouteModel> allRawRoutes = [];
+    final List<RouteModel> allRawRoutes = [];
     for (final routes in results) {
       allRawRoutes.addAll(routes);
     }
@@ -676,16 +679,16 @@ Future<List<RouteModel>> getSafeRoutesOptions(
       throw Exception('No routes found from OSRM');
     }
 
-    print("📊 Found ${allRawRoutes.length} raw routes");
+    debugPrint("📊 Found ${allRawRoutes.length} raw routes");
 
     // 5. GEOMETRIC DEDUPLICATION
     final List<RouteModel> uniqueRoutes = _deduplicateRoutes(allRawRoutes);
     
-    print("✅ After deduplication: ${uniqueRoutes.length} unique routes");
+    debugPrint("✅ After deduplication: ${uniqueRoutes.length} unique routes");
 
     // 6. FORCE ALTERNATIVE if only 1 route
     if (uniqueRoutes.length == 1) {
-      print("⚠️ Only 1 route found, forcing alternative...");
+      debugPrint("⚠️ Only 1 route found, forcing alternative...");
       
       final alternative = await _forceAlternativeRoute(
         uniqueRoutes.first,
@@ -696,9 +699,9 @@ Future<List<RouteModel>> getSafeRoutesOptions(
       
       if (alternative != null) {
         uniqueRoutes.add(alternative);
-        print("✅ Forced alternative generated");
+        debugPrint("✅ Forced alternative generated");
       } else {
-        print("⚠️ Could not generate forced alternative");
+        debugPrint("⚠️ Could not generate forced alternative");
       }
     }
 
@@ -757,10 +760,10 @@ Future<List<RouteModel>> getSafeRoutesOptions(
     // 9. Return top 3 routes
     final finalRoutes = analyzedRoutes.take(3).toList();
     
-    print("🎯 Returning ${finalRoutes.length} routes:");
+    debugPrint("🎯 Returning ${finalRoutes.length} routes:");
     for (int i = 0; i < finalRoutes.length; i++) {
       final r = finalRoutes[i];
-      print("   Route ${i + 1}: ${r.durationMinutes}min, ${(r.distanceMeters / 1000).toStringAsFixed(1)}km, ${r.riskLevel}");
+      debugPrint("   Route ${i + 1}: ${r.durationMinutes}min, ${(r.distanceMeters / 1000).toStringAsFixed(1)}km, ${r.riskLevel}");
     }
 
     return finalRoutes;
